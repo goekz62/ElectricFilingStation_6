@@ -12,6 +12,8 @@ public class StepDefinitions {
     private LocationManager locationManager;
     private List<Location> lastLocations;
     private ChargingPointManager chargingPointManager;
+    private List<ChargingPoint> lastChargingPoints;
+
 
     // Manage Location
     @Given("the network has no locations")
@@ -83,6 +85,18 @@ public class StepDefinitions {
                     ChargingType.valueOf(row.get("type"))
             );
         }
+    }
+
+    @When("the operator requests all charging points")
+    public void the_operator_requests_all_charging_points() {
+        lastChargingPoints = chargingPointManager.readAllChargingPoints();
+        lastChargingPoints.forEach(ChargingPoint::toString);
+    }
+
+    @Then("the system returns {int} charging points")
+    public void the_system_returns_charging_points(int expected) {
+        assertNotNull(lastChargingPoints);
+        assertEquals(expected, lastChargingPoints.size());
     }
 
 

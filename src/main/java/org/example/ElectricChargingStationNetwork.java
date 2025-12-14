@@ -17,8 +17,8 @@ public class ElectricChargingStationNetwork {
         System.out.println("Locations:");
         locationManager.readAllLocations().forEach(System.out::println);
 
-
-
+        System.out.println("\nCharging Points:");
+        chargingPointManager.readAllChargingPoints().forEach(System.out::println);
 
 
 

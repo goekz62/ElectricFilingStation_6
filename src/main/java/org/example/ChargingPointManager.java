@@ -11,10 +11,17 @@ public class ChargingPointManager {
         points.put(id, new ChargingPoint(id, locationId, type));
     }
 
+    public ChargingPoint readChargingPoint(String id) {
+        return points.get(id);
+    }
+
+    public List<ChargingPoint> readAllChargingPoints() {
+        return new ArrayList<>(points.values());
+    }
+
     public long countByLocation(String locationId) {
         return points.values().stream()
                 .filter(p -> p.locationId().equals(locationId))
                 .count();
     }
-
 }

@@ -11,6 +11,7 @@ public class StepDefinitions {
 
     private LocationManager locationManager;
     private List<Location> lastLocations;
+    private ChargingPointManager chargingPointManager;
 
     // Manage Location
     @Given("the network has no locations")
@@ -59,6 +60,30 @@ public class StepDefinitions {
         assertEquals(expected, lastLocations.size());
     }
 
+    @When("the operator adds a charging point with id {string} and type {string} to location {string}")
+    public void the_operator_adds_a_charging_point(String cpId, String type, String locationId) {
+        if (chargingPointManager == null) {
+            chargingPointManager = new ChargingPointManager();
+        }
+        chargingPointManager.createChargingPoint(cpId, locationId, ChargingType.valueOf(type));
+    }
+
+    @Then("location {string} has {int} charging points")
+    public void location_has_charging_points(String locationId, int expected) {
+        assertEquals(expected, chargingPointManager.countByLocation(locationId));
+    }
+
+    @Given("the locations have charging points")
+    public void the_locations_have_charging_points(DataTable table) {
+        if (chargingPointManager == null) chargingPointManager = new ChargingPointManager();
+        for (Map<String, String> row : table.asMaps(String.class, String.class)) {
+            chargingPointManager.createChargingPoint(
+                    row.get("id"),
+                    row.get("location"),
+                    ChargingType.valueOf(row.get("type"))
+            );
+        }
+    }
 
 
 }

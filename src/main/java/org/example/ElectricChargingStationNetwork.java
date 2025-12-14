@@ -7,6 +7,7 @@ public class ElectricChargingStationNetwork {
         // create
         locationManager.createLocation("L1", "Vienna Center", "Stephansplatz 1");
         locationManager.createLocation("L2", "Graz East", "Hauptstrasse 5");
+        locationManager.createLocation("L3", "Graz North", "Hauptstrasse 7");
 
         chargingPointManager.createChargingPoint("CP1", "L1", ChargingType.AC);
         chargingPointManager.createChargingPoint("CP2", "L1", ChargingType.DC);

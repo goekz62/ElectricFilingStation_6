@@ -14,6 +14,8 @@ public class StepDefinitions {
     private ChargingPointManager chargingPointManager;
     private List<ChargingPoint> lastChargingPoints;
 
+    private CustomerManager customerManager;
+
 
     // Manage Location
     @Given("the network has no locations")
@@ -98,6 +100,27 @@ public class StepDefinitions {
         assertNotNull(lastChargingPoints);
         assertEquals(expected, lastChargingPoints.size());
     }
+    // Customers (create/read only)
+    @Given("there are no customers")
+    public void there_are_no_customers() {
+        locationManager = new LocationManager();
+        chargingPointManager = new ChargingPointManager();
+        customerManager = new CustomerManager();
+    }
 
+    @When("a customer is created with id {string}, name {string} and lastname {string}")
+    public void  a_customer_is_created(String id, String firstName, String lastName) {
+        customerManager.createCustomer(id, firstName, lastName);
+    }
+
+    @Then("the customer list contains a customer with id {string} and name {string} and lastname {string}")
+    public void the_customer_list_contains_a_customer(String id, String firstName, String lastName) {
+        Customer c = customerManager.readCustomer(id);
+        assertNotNull(c);
+        assertEquals(id, c.id());
+        assertEquals(firstName, c.firstName());
+        assertEquals(lastName, c.lastName());
+        c.toString();
+    }
 
 }

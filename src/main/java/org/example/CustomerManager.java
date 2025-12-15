@@ -2,13 +2,17 @@ package org.example;
 
 import java.util.*;
 
-public class CustomerManager {private final Map<String, Customer> customers = new LinkedHashMap<>();
+public class CustomerManager {
 
-    public void createCustomer(String id, String firstName, String lastName) {
-        if (customers.containsKey(id)) {
-            throw new IllegalArgumentException("Customer already exists: " + id);
-        }
-        customers.put(id, new Customer(id, firstName, lastName));
+    private final Map<String, Customer> customers = new LinkedHashMap<>();
+    private int nextId = 1; // auto-increment counter
+
+    // SYSTEM generates the ID
+    public Customer createCustomer(String firstName, String lastName) {
+        String id = "C" + nextId++;
+        Customer customer = new Customer(id, firstName, lastName);
+        customers.put(id, customer);
+        return customer;
     }
 
     public Customer readCustomer(String id) {

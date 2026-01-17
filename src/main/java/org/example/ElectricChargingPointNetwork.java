@@ -1,14 +1,26 @@
 package org.example;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Date;
 import java.util.Locale;
 import java.util.Scanner;
 
 public class ElectricChargingPointNetwork {
 
+    private static final DateTimeFormatter ISO_DT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
+
+    private static Date parseIsoDateTime(String text) {
+        LocalDateTime ldt = LocalDateTime.parse(text, ISO_DT);
+        return Date.from(ldt.atZone(ZoneId.systemDefault()).toInstant());
+    }
+
     public static void main(String[] args) {
         LocationManager locationManager = new LocationManager();
         ChargingPointManager chargingPointManager = new ChargingPointManager();
         CustomerManager customerManager = new CustomerManager();
+        ChargingSessionManager chargingSessionManager = new ChargingSessionManager();
 
         // Seed data
         locationManager.createLocation("L1", "Vienna Center", "Stephansplatz 1");
@@ -23,6 +35,18 @@ public class ElectricChargingPointNetwork {
         customerManager.createCustomer("Katharina", "Weinberger");
         customerManager.createCustomer("Franz", "Steininger");
 
+        // DEMO session for US-11 viewing (creation happens later in customer story)
+        chargingSessionManager.createFinishedSession(
+                "S1",
+                "C1",
+                "CP1",
+                parseIsoDateTime("2026-01-17T10:00"),
+                parseIsoDateTime("2026-01-17T10:30"),
+                12.5,
+                7.80,
+                ChargingSessionStatus.FINISHED
+        );
+
         Scanner scanner = new Scanner(System.in);
 
         // --- ROLE SELECTION LOOP ---
@@ -36,7 +60,7 @@ public class ElectricChargingPointNetwork {
             }
 
             if (role.equals("operator")) {
-                runOperatorCLI(scanner, locationManager, chargingPointManager, customerManager);
+                runOperatorCLI(scanner, locationManager, chargingPointManager, customerManager, chargingSessionManager);
                 continue;
             }
 
@@ -58,7 +82,8 @@ public class ElectricChargingPointNetwork {
             Scanner scanner,
             LocationManager locationManager,
             ChargingPointManager chargingPointManager,
-            CustomerManager customerManager
+            CustomerManager customerManager,
+            ChargingSessionManager chargingSessionManager
     ) {
         System.out.println("""
 
@@ -67,6 +92,10 @@ public class ElectricChargingPointNetwork {
                 show charging points
                 show customers
                 show prices
+
+                show sessions
+                show session <sessionId>
+
                 create location <id> <name_with_underscores> <address_with_underscores>
                 create charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
                 define tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>
@@ -96,18 +125,35 @@ public class ElectricChargingPointNetwork {
                 customerManager.readAllCustomers().forEach(System.out::println);
                 continue;
             }
+
             if (input.equalsIgnoreCase("show prices")) {
                 locationManager.readAllLocations().forEach(loc -> {
                     System.out.println(loc.id() + " - " + loc.name());
                     if (loc.tariff() == null) {
                         System.out.println("  Tariff: NOT DEFINED");
                     } else {
-                        System.out.println(loc.tariff());
+                        System.out.println("  Tariff: " + loc.tariff());
                     }
                 });
                 continue;
             }
 
+            // US-11: VIEW CHARGING SESSIONS
+            if (input.equalsIgnoreCase("show sessions")) {
+                chargingSessionManager.readAllSessions().forEach(System.out::println);
+                continue;
+            }
+
+            if (input.toLowerCase(Locale.ROOT).startsWith("show session")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 3) {
+                    System.out.println("Usage: show session <sessionId>");
+                    continue;
+                }
+                ChargingSession s = chargingSessionManager.readSession(parts[2]);
+                System.out.println(s == null ? "Session not found." : s);
+                continue;
+            }
 
             // CREATE LOCATION
             if (input.toLowerCase(Locale.ROOT).startsWith("create location")) {

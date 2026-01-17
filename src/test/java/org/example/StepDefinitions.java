@@ -5,6 +5,10 @@ import io.cucumber.java.en.*;
 
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -20,6 +24,8 @@ public class StepDefinitions {
 
     // for auto-generated customer IDs
     private Customer createdCustomer;
+    private ChargingSessionManager chargingSessionManager;
+    private ChargingSession lastSession;
 
     // -------------------------
     // Locations
@@ -208,6 +214,68 @@ public class StepDefinitions {
     public void the_system_returns_prices_for_locations(int expected) {
         assertNotNull(lastPrices);
         assertEquals(expected, lastPrices.size());
+    }
+    private static final DateTimeFormatter ISO_DT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
+
+    private Date parseIsoDateTime(String text) {
+        LocalDateTime ldt = LocalDateTime.parse(text, ISO_DT);
+        return Date.from(ldt.atZone(ZoneId.systemDefault()).toInstant());
+    }
+
+    @Given("a charging session exists")
+    public void a_charging_session_exists(io.cucumber.datatable.DataTable table) {
+        if (chargingSessionManager == null) {
+            chargingSessionManager = new ChargingSessionManager();
+        }
+
+        Map<String, String> row = table.asMaps(String.class, String.class).get(0);
+
+        String id = row.get("id");
+        String customerId = row.get("customerId");
+        String chargingPointId = row.get("chargingPointId");
+
+        Date start = parseIsoDateTime(row.get("startTime"));
+        Date end = row.get("endTime") == null ? null : parseIsoDateTime(row.get("endTime"));
+
+        double kWh = Double.parseDouble(row.get("kWhCharged"));
+        double cost = Double.parseDouble(row.get("totalCost"));
+
+        ChargingSessionStatus status = ChargingSessionStatus.valueOf(row.get("status"));
+
+        chargingSessionManager.createFinishedSession(id, customerId, chargingPointId, start, end, kWh, cost, status);
+    }
+
+    @When("the operator requests charging session {string}")
+    public void the_operator_requests_charging_session(String sessionId) {
+        lastSession = chargingSessionManager.readSession(sessionId);
+    }
+
+    @Then("the session shows customer {string} and charging point {string}")
+    public void the_session_shows_customer_and_charging_point(String customerId, String chargingPointId) {
+        assertNotNull(lastSession);
+        assertEquals(customerId, lastSession.customerId());
+        assertEquals(chargingPointId, lastSession.chargingPointId());
+    }
+
+    @Then("the session has start time {string} and end time {string}")
+    public void the_session_has_start_and_end_time(String startText, String endText) {
+        assertNotNull(lastSession);
+        assertEquals(parseIsoDateTime(startText), lastSession.startTime());
+        assertEquals(parseIsoDateTime(endText), lastSession.endTime());
+    }
+
+    @Then("the session has kWh charged {double} and total cost {double}")
+    public void the_session_has_kwh_and_total_cost(double kWh, double totalCost) {
+        assertNotNull(lastSession);
+        assertEquals(kWh, lastSession.kWhCharged(), 0.0001);
+        assertEquals(totalCost, lastSession.totalCost(), 0.0001);
+    }
+
+    @Then("the session status is {string}")
+    public void the_session_status_is(String status) {
+        assertNotNull(lastSession);
+        assertEquals(ChargingSessionStatus.valueOf(status), lastSession.status());
+        lastSession.toString(); // ensures toString works
     }
 
 

@@ -13,11 +13,12 @@ Feature: Monitor Network (Operator)
 
   Scenario: view list of all charging points
     Given the locations have charging points
-      | id  | location         | type |
-      | CP1 | L1               | AC   |
-      | CP2 | L1               | DC   |
-      | CP3 | L2               | DC   |
+      | id  | location | type | status       |
+      | CP1 | L1       | AC   | AVAILABLE    |
+      | CP2 | L1       | DC   | OCCUPIED     |
+      | CP3 | L2       | DC   | OUT_OF_ORDER |
     When the operator requests all charging points
     Then the system returns 3 charging points
+
 
 

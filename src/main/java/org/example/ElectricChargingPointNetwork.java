@@ -14,9 +14,9 @@ public class ElectricChargingPointNetwork {
         locationManager.createLocation("L2", "Graz East", "Hauptstrasse 5");
         locationManager.createLocation("L3", "Graz North", "Hauptstrasse 7");
 
-        chargingPointManager.createChargingPoint("CP1", "L1", ChargingType.AC);
-        chargingPointManager.createChargingPoint("CP2", "L1", ChargingType.DC);
-        chargingPointManager.createChargingPoint("CP3", "L2", ChargingType.DC);
+        chargingPointManager.createChargingPoint("CP1", "L1", ChargingType.AC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP2", "L1", ChargingType.DC, ChargingPointStatus.OCCUPIED);
+        chargingPointManager.createChargingPoint("CP3", "L2", ChargingType.DC, ChargingPointStatus.OUT_OF_ORDER);
 
         customerManager.createCustomer("Judith", "Muellner");
         customerManager.createCustomer("Katharina", "Weinberger");
@@ -80,8 +80,8 @@ public class ElectricChargingPointNetwork {
 
                 String[] parts = input.split("\\s+");
 
-                while (parts.length < 6) {
-                    System.out.println("Usage: create charging point <id> <locationId> <AC|DC>");
+                while (parts.length < 7) {
+                    System.out.println("Usage: create charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>");
                     System.out.print("Enter full create charging point command: ");
                     input = scanner.nextLine().trim();
                     parts = input.split("\\s+");
@@ -89,15 +89,11 @@ public class ElectricChargingPointNetwork {
 
                 String cpId = parts[3];
                 String locationId = parts[4];
-                String typeStr = parts[5].toUpperCase(Locale.ROOT);
+                ChargingType type = ChargingType.valueOf(parts[5].toUpperCase(Locale.ROOT));
+                ChargingPointStatus status = ChargingPointStatus.valueOf(parts[6].toUpperCase(Locale.ROOT));
 
-                try {
-                    ChargingType type = ChargingType.valueOf(typeStr);
-                    chargingPointManager.createChargingPoint(cpId, locationId, type);
-                    System.out.println("Created charging point: " + cpId);
-                } catch (IllegalArgumentException e) {
-                    System.out.println("Error: " + e.getMessage());
-                }
+                chargingPointManager.createChargingPoint(cpId, locationId, type, status);
+                System.out.println("Created charging point: " + cpId);
 
                 continue;
             }

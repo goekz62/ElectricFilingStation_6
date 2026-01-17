@@ -4,11 +4,16 @@ import java.util.*;
 public class ChargingPointManager {
     private final Map<String, ChargingPoint> points = new LinkedHashMap<>();
 
-    public void createChargingPoint(String id, String locationId, ChargingType type) {
+    public void createChargingPoint(
+            String id,
+            String locationId,
+            ChargingType type,
+            ChargingPointStatus status
+    ) {
         if (points.containsKey(id)) {
             throw new IllegalArgumentException("Charging point already exists: " + id);
         }
-        points.put(id, new ChargingPoint(id, locationId, type));
+        points.put(id, new ChargingPoint(id, locationId, type, status));
     }
 
     public ChargingPoint readChargingPoint(String id) {

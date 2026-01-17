@@ -10,6 +10,6 @@ Feature: Manage Locations and Charging Points
 
   Scenario: add AC and DC points
     Given a location exists with id "L1", name "Vienna Center", address "Stephansplatz 1"
-    When the operator adds a charging point with id "CP1" and type "AC" to location "L1"
-    And the operator adds a charging point with id "CP2" and type "DC" to location "L1"
+    When the operator adds a charging point with id "CP1" and type "AC" and status "AVAILABLE" to location "L1"
+    And the operator adds a charging point with id "CP2" and type "DC" and status "OCCUPIED" to location "L1"
     Then location "L1" has 2 charging points

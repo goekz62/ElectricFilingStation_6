@@ -10,7 +10,7 @@ public class ElectricChargingPointNetwork {
         ChargingPointManager chargingPointManager = new ChargingPointManager();
         CustomerManager customerManager = new CustomerManager();
 
-        // Seed data 
+        // Seed data
         locationManager.createLocation("L1", "Vienna Center", "Stephansplatz 1");
         locationManager.createLocation("L2", "Graz East", "Hauptstrasse 5");
         locationManager.createLocation("L3", "Graz North", "Hauptstrasse 7");
@@ -61,7 +61,7 @@ public class ElectricChargingPointNetwork {
             CustomerManager customerManager
     ) {
         System.out.println("""
-                
+
                 OPERATOR COMMANDS:
                 show locations
                 show charging points
@@ -69,6 +69,7 @@ public class ElectricChargingPointNetwork {
                 create location <id> <name_with_underscores> <address_with_underscores>
                 create charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
                 define tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>
+                update tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>
                 back
                 """);
 
@@ -128,8 +129,8 @@ public class ElectricChargingPointNetwork {
                     chargingPointManager.createChargingPoint(
                             parts[3],
                             parts[4],
-                            ChargingType.valueOf(parts[5].toUpperCase()),
-                            ChargingPointStatus.valueOf(parts[6].toUpperCase())
+                            ChargingType.valueOf(parts[5].toUpperCase(Locale.ROOT)),
+                            ChargingPointStatus.valueOf(parts[6].toUpperCase(Locale.ROOT))
                     );
                     System.out.println("Charging point created.");
                 } catch (IllegalArgumentException e) {
@@ -138,7 +139,7 @@ public class ElectricChargingPointNetwork {
                 continue;
             }
 
-            // DEFINE TARIFF
+            // DEFINE TARIFF (US-6)
             if (input.toLowerCase(Locale.ROOT).startsWith("define tariff")) {
                 String[] parts = input.split("\\s+");
                 if (parts.length < 7) {
@@ -154,8 +155,35 @@ public class ElectricChargingPointNetwork {
                             Double.parseDouble(parts[5]),
                             Double.parseDouble(parts[6])
                     );
-                    System.out.println("Tariff defined.");
-                } catch (Exception e) {
+                    System.out.println("Tariff defined for location " + parts[2] + ".");
+                } catch (NumberFormatException e) {
+                    System.out.println("Error: prices must be numbers (example: 0.45 0.60 0.05 0.08)");
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Error: " + e.getMessage());
+                }
+                continue;
+            }
+
+            // UPDATE TARIFF (US-7)
+            if (input.toLowerCase(Locale.ROOT).startsWith("update tariff")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 7) {
+                    System.out.println("Usage: update tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>");
+                    continue;
+                }
+
+                try {
+                    locationManager.updateTariff(
+                            parts[2],
+                            Double.parseDouble(parts[3]),
+                            Double.parseDouble(parts[4]),
+                            Double.parseDouble(parts[5]),
+                            Double.parseDouble(parts[6])
+                    );
+                    System.out.println("Tariff updated for location " + parts[2] + ".");
+                } catch (NumberFormatException e) {
+                    System.out.println("Error: prices must be numbers (example: 0.50 0.70 0.06 0.10)");
+                } catch (IllegalArgumentException e) {
                     System.out.println("Error: " + e.getMessage());
                 }
                 continue;
@@ -175,7 +203,7 @@ public class ElectricChargingPointNetwork {
             CustomerManager customerManager
     ) {
         System.out.println("""
-                
+
                 CUSTOMER COMMANDS:
                 show locations
                 show charging points

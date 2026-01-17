@@ -38,4 +38,31 @@ public class LocationManager {
         Location updated = new Location(loc.id(), loc.name(), loc.address(), tariff);
         locations.put(locationId, updated);
     }
+    public void updateTariff(String locationId,
+                             double pricePerKwhAC,
+                             double pricePerKwhDC,
+                             double pricePerMinuteAC,
+                             double pricePerMinuteDC) {
+
+        Location loc = locations.get(locationId);
+        if (loc == null) {
+            throw new IllegalArgumentException("Location not found: " + locationId);
+        }
+        if (loc.tariff() == null) {
+            throw new IllegalArgumentException("No tariff defined for location: " + locationId);
+        }
+
+        // keep same tariffId, only update prices
+        Tariff old = loc.tariff();
+        Tariff updatedTariff = new Tariff(
+                old.tariffId(),
+                pricePerKwhAC,
+                pricePerKwhDC,
+                pricePerMinuteAC,
+                pricePerMinuteDC
+        );
+
+        Location updatedLocation = new Location(loc.id(), loc.name(), loc.address(), updatedTariff);
+        locations.put(locationId, updatedLocation);
+    }
 }

@@ -187,5 +187,18 @@ public class StepDefinitions {
         t.toString();
     }
 
+    @When("the operator updates the tariff for location {string} to")
+    public void the_operator_updates_the_tariff_for_location_to(String locationId, DataTable table) {
+        Map<String, String> row = table.asMaps(String.class, String.class).get(0);
+
+        double kwhAC = Double.parseDouble(row.get("pricePerKwhAC"));
+        double kwhDC = Double.parseDouble(row.get("pricePerKwhDC"));
+        double minAC = Double.parseDouble(row.get("pricePerMinuteAC"));
+        double minDC = Double.parseDouble(row.get("pricePerMinuteDC"));
+
+        locationManager.updateTariff(locationId, kwhAC, kwhDC, minAC, minDC);
+    }
+
+
 
 }

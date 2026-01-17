@@ -9,7 +9,7 @@ public record Location(String id, String name, String address, Tariff tariff) {
 
     @Override
     public String toString() {
-        return "Location{id='%s', name='%s', address='%s', tariff=%s}"
+        return "Location{id='%s', name='%s', address='%s', %s}"
                 .formatted(id, name, address, tariff);
     }
 }

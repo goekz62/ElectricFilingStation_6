@@ -65,4 +65,13 @@ public class LocationManager {
         Location updatedLocation = new Location(loc.id(), loc.name(), loc.address(), updatedTariff);
         locations.put(locationId, updatedLocation);
     }
+
+    public Map<String, Tariff> readCurrentPricesByLocation() {
+        Map<String, Tariff> result = new LinkedHashMap<>();
+        for (Location loc : locations.values()) {
+            result.put(loc.id(), loc.tariff()); // may be null if not defined yet
+        }
+        return result;
+    }
+
 }

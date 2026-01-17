@@ -66,6 +66,7 @@ public class ElectricChargingPointNetwork {
                 show locations
                 show charging points
                 show customers
+                show prices
                 create location <id> <name_with_underscores> <address_with_underscores>
                 create charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
                 define tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>
@@ -95,6 +96,18 @@ public class ElectricChargingPointNetwork {
                 customerManager.readAllCustomers().forEach(System.out::println);
                 continue;
             }
+            if (input.equalsIgnoreCase("show prices")) {
+                locationManager.readAllLocations().forEach(loc -> {
+                    System.out.println(loc.id() + " - " + loc.name());
+                    if (loc.tariff() == null) {
+                        System.out.println("  Tariff: NOT DEFINED");
+                    } else {
+                        System.out.println(loc.tariff());
+                    }
+                });
+                continue;
+            }
+
 
             // CREATE LOCATION
             if (input.toLowerCase(Locale.ROOT).startsWith("create location")) {

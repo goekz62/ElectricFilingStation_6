@@ -24,3 +24,18 @@ Feature: Manage Pricing (Operator)
     Then location "L1" has tariff
       | pricePerKwhAC | pricePerKwhDC | pricePerMinuteAC | pricePerMinuteDC |
       | 0.50          | 0.70          | 0.06             | 0.10             |
+
+
+  Scenario: view current price for each location
+    Given the network has locations
+      | id | name          | address         |
+      | L1 | Vienna Center | Stephansplatz 1 |
+      | L2 | Graz East     | Hauptstrasse 5  |
+    And the operator defines a tariff for location "L1" with
+      | pricePerKwhAC | pricePerKwhDC | pricePerMinuteAC | pricePerMinuteDC |
+      | 0.45          | 0.60          | 0.05             | 0.08             |
+    And the operator defines a tariff for location "L2" with
+      | pricePerKwhAC | pricePerKwhDC | pricePerMinuteAC | pricePerMinuteDC |
+      | 0.40          | 0.55          | 0.04             | 0.07             |
+    When the operator requests current prices for all locations
+    Then the system returns prices for 2 locations

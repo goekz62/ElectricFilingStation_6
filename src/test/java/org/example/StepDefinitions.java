@@ -16,6 +16,7 @@ public class StepDefinitions {
 
     private List<Location> lastLocations;
     private List<ChargingPoint> lastChargingPoints;
+    private Map<String, Tariff> lastPrices;
 
     // for auto-generated customer IDs
     private Customer createdCustomer;
@@ -198,6 +199,17 @@ public class StepDefinitions {
 
         locationManager.updateTariff(locationId, kwhAC, kwhDC, minAC, minDC);
     }
+    @When("the operator requests current prices for all locations")
+    public void the_operator_requests_current_prices_for_all_locations() {
+        lastPrices = locationManager.readCurrentPricesByLocation();
+    }
+
+    @Then("the system returns prices for {int} locations")
+    public void the_system_returns_prices_for_locations(int expected) {
+        assertNotNull(lastPrices);
+        assertEquals(expected, lastPrices.size());
+    }
+
 
 
 

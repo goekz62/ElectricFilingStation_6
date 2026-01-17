@@ -22,6 +22,9 @@ public class ElectricChargingPointNetwork {
         CustomerManager customerManager = new CustomerManager();
         ChargingSessionManager chargingSessionManager = new ChargingSessionManager();
 
+        // ✅ NEW: US-12 manager
+        InvoiceManager invoiceManager = new InvoiceManager();
+
         // Seed data
         locationManager.createLocation("L1", "Vienna Center", "Stephansplatz 1");
         locationManager.createLocation("L2", "Graz East", "Hauptstrasse 5");
@@ -31,20 +34,34 @@ public class ElectricChargingPointNetwork {
         chargingPointManager.createChargingPoint("CP2", "L1", ChargingType.DC, ChargingPointStatus.OCCUPIED);
         chargingPointManager.createChargingPoint("CP3", "L2", ChargingType.DC, ChargingPointStatus.OUT_OF_ORDER);
 
-        customerManager.createCustomer("Judith", "Muellner");
+        // create customers (auto id: C1, C2, C3)
+        Customer c1 = customerManager.createCustomer("Judith", "Muellner");
         customerManager.createCustomer("Katharina", "Weinberger");
         customerManager.createCustomer("Franz", "Steininger");
 
         // DEMO session for US-11 viewing (creation happens later in customer story)
         chargingSessionManager.createFinishedSession(
                 "S1",
-                "C1",
+                c1.id(),
                 "CP1",
                 parseIsoDateTime("2026-01-17T10:00"),
                 parseIsoDateTime("2026-01-17T10:30"),
                 12.5,
                 7.80,
                 ChargingSessionStatus.FINISHED
+        );
+
+        // ✅ US-12 DEMO DATA (top-ups + invoices for customer C1)
+        invoiceManager.addTopUp("T1", c1.id(), 20.00, parseIsoDateTime("2026-01-17T09:00"));
+        invoiceManager.addTopUp("T2", c1.id(), 15.00, parseIsoDateTime("2026-01-17T09:30"));
+
+        ChargingSession s1 = chargingSessionManager.readSession("S1");
+        invoiceManager.addInvoice(
+                "I1",
+                c1.id(),
+                s1,
+                parseIsoDateTime("2026-01-17T10:30"),
+                InvoiceStatus.PAID
         );
 
         Scanner scanner = new Scanner(System.in);
@@ -60,7 +77,7 @@ public class ElectricChargingPointNetwork {
             }
 
             if (role.equals("operator")) {
-                runOperatorCLI(scanner, locationManager, chargingPointManager, customerManager, chargingSessionManager);
+                runOperatorCLI(scanner, locationManager, chargingPointManager, customerManager, chargingSessionManager, invoiceManager);
                 continue;
             }
 
@@ -83,7 +100,8 @@ public class ElectricChargingPointNetwork {
             LocationManager locationManager,
             ChargingPointManager chargingPointManager,
             CustomerManager customerManager,
-            ChargingSessionManager chargingSessionManager
+            ChargingSessionManager chargingSessionManager,
+            InvoiceManager invoiceManager // ✅ NEW
     ) {
         System.out.println("""
 
@@ -95,6 +113,8 @@ public class ElectricChargingPointNetwork {
 
                 show sessions
                 show session <sessionId>
+
+                show billing <customerId>   (US-12)
 
                 create location <id> <name_with_underscores> <address_with_underscores>
                 create charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
@@ -152,6 +172,43 @@ public class ElectricChargingPointNetwork {
                 }
                 ChargingSession s = chargingSessionManager.readSession(parts[2]);
                 System.out.println(s == null ? "Session not found." : s);
+                continue;
+            }
+
+            // ✅ US-12: VIEW BILLING HISTORY
+            if (input.toLowerCase(Locale.ROOT).startsWith("show billing")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 3) {
+                    System.out.println("Usage: show billing <customerId>");
+                    continue;
+                }
+
+                String customerId = parts[2];
+                Customer c = customerManager.readCustomer(customerId);
+
+                if (c == null) {
+                    System.out.println("Customer not found: " + customerId);
+                    continue;
+                }
+
+                System.out.println("Customer: " + c);
+
+                System.out.println("\nTop-Ups:");
+                var topUps = invoiceManager.readTopUps(customerId);
+                if (topUps.isEmpty()) {
+                    System.out.println("  (none)");
+                } else {
+                    topUps.forEach(t -> System.out.println("  " + t));
+                }
+
+                System.out.println("\nInvoices:");
+                var invoices = invoiceManager.readInvoices(customerId);
+                if (invoices.isEmpty()) {
+                    System.out.println("  (none)");
+                } else {
+                    invoices.forEach(inv -> System.out.println("  " + inv));
+                }
+
                 continue;
             }
 

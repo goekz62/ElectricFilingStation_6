@@ -3,12 +3,12 @@ package org.example;
 import io.cucumber.datatable.DataTable;
 import io.cucumber.java.en.*;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -20,24 +20,43 @@ public class StepDefinitions {
 
     private List<Location> lastLocations;
     private List<ChargingPoint> lastChargingPoints;
+
     private Map<String, Tariff> lastPrices;
 
-    // for auto-generated customer IDs
-    private Customer createdCustomer;
+    // US11
     private ChargingSessionManager chargingSessionManager;
     private ChargingSession lastSession;
 
-    // -------------------------
+    // US12
+    private InvoiceManager invoiceManager;
+    private List<TopUp> lastTopUps;
+    private List<Invoice> lastInvoices;
+
+    // auto-generated customer IDs
+    private Customer createdCustomer;
+
+    // =========================================================
+    // Helpers
+    // =========================================================
+    private static final DateTimeFormatter ISO_DT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
+
+    private Date parseIsoDateTime(String text) {
+        LocalDateTime ldt = LocalDateTime.parse(text, ISO_DT);
+        return Date.from(ldt.atZone(ZoneId.systemDefault()).toInstant());
+    }
+
+    // =========================================================
     // Locations
-    // -------------------------
+    // =========================================================
     @Given("the network has no locations")
     public void the_network_has_no_locations() {
         locationManager = new LocationManager();
-        chargingPointManager = new ChargingPointManager(); // safe init for scenarios that add points
+        chargingPointManager = new ChargingPointManager();
     }
 
     @When("the operator creates a location with id {string}, name {string}, address {string}")
     public void the_operator_creates_a_location(String id, String name, String address) {
+        if (locationManager == null) locationManager = new LocationManager();
         locationManager.createLocation(id, name, address);
     }
 
@@ -77,9 +96,9 @@ public class StepDefinitions {
         assertEquals(expected, lastLocations.size());
     }
 
-    // -------------------------
+    // =========================================================
     // Charging Points (WITH STATUS)
-    // -------------------------
+    // =========================================================
     @When("the operator adds a charging point with id {string} and type {string} and status {string} to location {string}")
     public void the_operator_adds_a_charging_point(String cpId, String type, String status, String locationId) {
         if (chargingPointManager == null) chargingPointManager = new ChargingPointManager();
@@ -124,18 +143,21 @@ public class StepDefinitions {
         assertEquals(expected, lastChargingPoints.size());
     }
 
-    // -------------------------
+    // =========================================================
     // Customers (AUTO-ID)
-    // -------------------------
+    // =========================================================
     @Given("there are no customers")
     public void there_are_no_customers() {
         customerManager = new CustomerManager();
         createdCustomer = null;
     }
 
+    // ✅ KEEP ONLY THIS ONE (removes duplicate exception)
     @When("a customer is created with name {string} and lastname {string}")
     public void a_customer_is_created(String firstName, String lastName) {
-        createdCustomer = customerManager.createCustomer(firstName, lastName); // system generates ID
+        if (customerManager == null) customerManager = new CustomerManager();
+        createdCustomer = customerManager.createCustomer(firstName, lastName);
+        assertNotNull(createdCustomer);
     }
 
     @Then("the customer list contains a customer with name {string} and lastname {string}")
@@ -144,7 +166,6 @@ public class StepDefinitions {
         assertEquals(firstName, createdCustomer.firstName());
         assertEquals(lastName, createdCustomer.lastName());
 
-        // verify it's stored in the manager
         Customer fromManager = customerManager.readCustomer(createdCustomer.id());
         assertNotNull(fromManager);
         assertEquals(createdCustomer, fromManager);
@@ -157,9 +178,9 @@ public class StepDefinitions {
         assertTrue(createdCustomer.id().startsWith(prefix));
     }
 
-    // -------------------------
-// Pricing (US-6)
-// -------------------------
+    // =========================================================
+    // Pricing (US-6, US-7, US-9)
+    // =========================================================
     @When("the operator defines a tariff for location {string} with")
     public void the_operator_defines_a_tariff_for_location_with(String locationId, DataTable table) {
         Map<String, String> row = table.asMaps(String.class, String.class).get(0);
@@ -205,6 +226,7 @@ public class StepDefinitions {
 
         locationManager.updateTariff(locationId, kwhAC, kwhDC, minAC, minDC);
     }
+
     @When("the operator requests current prices for all locations")
     public void the_operator_requests_current_prices_for_all_locations() {
         lastPrices = locationManager.readCurrentPricesByLocation();
@@ -215,15 +237,12 @@ public class StepDefinitions {
         assertNotNull(lastPrices);
         assertEquals(expected, lastPrices.size());
     }
-    private static final DateTimeFormatter ISO_DT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
 
-    private Date parseIsoDateTime(String text) {
-        LocalDateTime ldt = LocalDateTime.parse(text, ISO_DT);
-        return Date.from(ldt.atZone(ZoneId.systemDefault()).toInstant());
-    }
-
+    // =========================================================
+    // US-11 Charging Session Info
+    // =========================================================
     @Given("a charging session exists")
-    public void a_charging_session_exists(io.cucumber.datatable.DataTable table) {
+    public void a_charging_session_exists(DataTable table) {
         if (chargingSessionManager == null) {
             chargingSessionManager = new ChargingSessionManager();
         }
@@ -275,10 +294,84 @@ public class StepDefinitions {
     public void the_session_status_is(String status) {
         assertNotNull(lastSession);
         assertEquals(ChargingSessionStatus.valueOf(status), lastSession.status());
-        lastSession.toString(); // ensures toString works
+        lastSession.toString();
     }
 
+    // =========================================================
+    // US-12 View invoices + top-ups (InvoiceManager)
+    // =========================================================
+    @Given("the customer has top-ups")
+    public void the_customer_has_topups(DataTable table) {
+        if (invoiceManager == null) invoiceManager = new InvoiceManager();
+        assertNotNull(createdCustomer);
 
+        for (Map<String, String> row : table.asMaps(String.class, String.class)) {
+            invoiceManager.addTopUp(
+                    row.get("id"),
+                    createdCustomer.id(),
+                    Double.parseDouble(row.get("amount")),
+                    parseIsoDateTime(row.get("dateTime"))
+            );
+        }
+    }
 
+    @Given("the customer has invoices")
+    public void the_customer_has_invoices(DataTable table) {
+        if (invoiceManager == null) invoiceManager = new InvoiceManager();
+        assertNotNull(createdCustomer);
 
+        for (Map<String, String> row : table.asMaps(String.class, String.class)) {
+
+            ChargingSession session = new ChargingSession(
+                    row.get("sessionId"),
+                    createdCustomer.id(),
+                    row.get("chargingPointId"),
+                    parseIsoDateTime(row.get("startTime")),
+                    parseIsoDateTime(row.get("endTime")),
+                    Double.parseDouble(row.get("kWhCharged")),
+                    Double.parseDouble(row.get("totalCost")),
+                    ChargingSessionStatus.FINISHED
+            );
+
+            invoiceManager.addInvoice(
+                    row.get("invoiceId"),
+                    createdCustomer.id(),
+                    session,
+                    parseIsoDateTime(row.get("endTime")),
+                    InvoiceStatus.valueOf(row.get("status"))
+            );
+        }
+    }
+
+    @When("the operator requests billing history for that customer")
+    public void the_operator_requests_billing_history_for_that_customer() {
+        assertNotNull(createdCustomer);
+        assertNotNull(invoiceManager);
+
+        lastTopUps = invoiceManager.readTopUps(createdCustomer.id());
+        lastInvoices = invoiceManager.readInvoices(createdCustomer.id());
+    }
+
+    @Then("the system returns {int} top-ups and {int} invoices")
+    public void the_system_returns_topups_and_invoices(int expectedTopUps, int expectedInvoices) {
+        assertNotNull(lastTopUps);
+        assertNotNull(lastInvoices);
+        assertEquals(expectedTopUps, lastTopUps.size());
+        assertEquals(expectedInvoices, lastInvoices.size());
+    }
+
+    @Then("invoice {string} includes session {string} on charging point {string} with total cost {double}")
+    public void invoice_includes_session_on_cp_with_total_cost(String invoiceId, String sessionId, String chargingPointId, double totalCost) {
+        assertNotNull(lastInvoices);
+
+        Invoice invoice = lastInvoices.stream()
+                .filter(i -> i.id().equals(invoiceId))
+                .findFirst()
+                .orElse(null);
+
+        assertNotNull(invoice);
+        assertEquals(sessionId, invoice.session().id());
+        assertEquals(chargingPointId, invoice.session().chargingPointId());
+        assertEquals(totalCost, invoice.session().totalCost(), 0.0001);
+    }
 }

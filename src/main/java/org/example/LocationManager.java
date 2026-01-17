@@ -9,7 +9,7 @@ public class LocationManager {
         if (locations.containsKey(id)) {
             throw new IllegalArgumentException("Location already exists: " + id);
         }
-        locations.put(id, new Location(id, name, address));
+        locations.put(id, new Location(id, name, address)); // tariff = null initially
     }
 
     public Location readLocation(String id) {
@@ -18,5 +18,24 @@ public class LocationManager {
 
     public List<Location> readAllLocations() {
         return new ArrayList<>(locations.values());
+    }
+
+    // MVP2: define pricing (Tariff) for a location
+    public void defineTariff(String locationId,
+                             double pricePerKwhAC,
+                             double pricePerKwhDC,
+                             double pricePerMinuteAC,
+                             double pricePerMinuteDC) {
+
+        Location loc = locations.get(locationId);
+        if (loc == null) {
+            throw new IllegalArgumentException("Location not found: " + locationId);
+        }
+
+        Tariff tariff = new Tariff("T-" + locationId, pricePerKwhAC, pricePerKwhDC, pricePerMinuteAC, pricePerMinuteDC);
+
+        // record is immutable -> replace with updated copy
+        Location updated = new Location(loc.id(), loc.name(), loc.address(), tariff);
+        locations.put(locationId, updated);
     }
 }

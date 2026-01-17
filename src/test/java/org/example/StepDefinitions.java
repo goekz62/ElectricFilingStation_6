@@ -149,4 +149,43 @@ public class StepDefinitions {
         assertNotNull(createdCustomer);
         assertTrue(createdCustomer.id().startsWith(prefix));
     }
+
+    // -------------------------
+// Pricing (US-6)
+// -------------------------
+    @When("the operator defines a tariff for location {string} with")
+    public void the_operator_defines_a_tariff_for_location_with(String locationId, DataTable table) {
+        Map<String, String> row = table.asMaps(String.class, String.class).get(0);
+
+        double kwhAC = Double.parseDouble(row.get("pricePerKwhAC"));
+        double kwhDC = Double.parseDouble(row.get("pricePerKwhDC"));
+        double minAC = Double.parseDouble(row.get("pricePerMinuteAC"));
+        double minDC = Double.parseDouble(row.get("pricePerMinuteDC"));
+
+        locationManager.defineTariff(locationId, kwhAC, kwhDC, minAC, minDC);
+    }
+
+    @Then("location {string} has tariff")
+    public void location_has_tariff(String locationId, DataTable table) {
+        Map<String, String> row = table.asMaps(String.class, String.class).get(0);
+
+        double expKwhAC = Double.parseDouble(row.get("pricePerKwhAC"));
+        double expKwhDC = Double.parseDouble(row.get("pricePerKwhDC"));
+        double expMinAC = Double.parseDouble(row.get("pricePerMinuteAC"));
+        double expMinDC = Double.parseDouble(row.get("pricePerMinuteDC"));
+
+        Location loc = locationManager.readLocation(locationId);
+        assertNotNull(loc);
+        assertNotNull(loc.tariff());
+
+        Tariff t = loc.tariff();
+        assertEquals(expKwhAC, t.pricePerKwhAC(), 0.00001);
+        assertEquals(expKwhDC, t.pricePerKwhDC(), 0.00001);
+        assertEquals(expMinAC, t.pricePerMinuteAC(), 0.00001);
+        assertEquals(expMinDC, t.pricePerMinuteDC(), 0.00001);
+
+        t.toString();
+    }
+
+
 }

@@ -4,12 +4,13 @@ import java.util.Locale;
 import java.util.Scanner;
 
 public class ElectricChargingPointNetwork {
+
     public static void main(String[] args) {
         LocationManager locationManager = new LocationManager();
         ChargingPointManager chargingPointManager = new ChargingPointManager();
         CustomerManager customerManager = new CustomerManager();
 
-        // create
+        // Seed data 
         locationManager.createLocation("L1", "Vienna Center", "Stephansplatz 1");
         locationManager.createLocation("L2", "Graz East", "Hauptstrasse 5");
         locationManager.createLocation("L3", "Graz North", "Hauptstrasse 7");
@@ -24,16 +25,61 @@ public class ElectricChargingPointNetwork {
 
         Scanner scanner = new Scanner(System.in);
 
+        // --- ROLE SELECTION LOOP ---
         while (true) {
-            System.out.println("\nType a command (show locations | show charging points | show customers | create location | create charging point | create customer | exit):");
-            String input = scanner.nextLine().trim();
+            System.out.println("\nWho are you? (operator | customer | exit)");
+            String role = scanner.nextLine().trim().toLowerCase(Locale.ROOT);
 
-            if (input.equalsIgnoreCase("exit")) {
+            if (role.equals("exit")) {
                 System.out.println("Bye!");
                 break;
             }
 
-            // SHOW commands
+            if (role.equals("operator")) {
+                runOperatorCLI(scanner, locationManager, chargingPointManager, customerManager);
+                continue;
+            }
+
+            if (role.equals("customer")) {
+                runCustomerCLI(scanner, locationManager, chargingPointManager, customerManager);
+                continue;
+            }
+
+            System.out.println("Unknown role.");
+        }
+
+        scanner.close();
+    }
+
+    // =========================================================
+    // OPERATOR CLI
+    // =========================================================
+    private static void runOperatorCLI(
+            Scanner scanner,
+            LocationManager locationManager,
+            ChargingPointManager chargingPointManager,
+            CustomerManager customerManager
+    ) {
+        System.out.println("""
+                
+                OPERATOR COMMANDS:
+                show locations
+                show charging points
+                show customers
+                create location <id> <name_with_underscores> <address_with_underscores>
+                create charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
+                define tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>
+                back
+                """);
+
+        while (true) {
+            System.out.print("operator> ");
+            String input = scanner.nextLine().trim();
+
+            if (input.equalsIgnoreCase("back")) {
+                return;
+            }
+
             if (input.equalsIgnoreCase("show locations")) {
                 locationManager.readAllLocations().forEach(System.out::println);
                 continue;
@@ -51,78 +97,126 @@ public class ElectricChargingPointNetwork {
 
             // CREATE LOCATION
             if (input.toLowerCase(Locale.ROOT).startsWith("create location")) {
-
                 String[] parts = input.split("\\s+");
-
-                while (parts.length < 5) {
-                    System.out.println("Usage: create location <id> <name_with_underscores> <address_with_underscores>");
-                    System.out.print("Enter full create location command: ");
-                    input = scanner.nextLine().trim();
-                    parts = input.split("\\s+");
+                if (parts.length < 5) {
+                    System.out.println("Usage: create location <id> <name> <address>");
+                    continue;
                 }
 
-                String id = parts[2];
-                String name = parts[3].replace("_", " ");
-                String address = parts[4].replace("_", " ");
-
                 try {
-                    locationManager.createLocation(id, name, address);
-                    System.out.println("Created: " + locationManager.readLocation(id));
+                    locationManager.createLocation(
+                            parts[2],
+                            parts[3].replace("_", " "),
+                            parts[4].replace("_", " ")
+                    );
+                    System.out.println("Location created.");
                 } catch (IllegalArgumentException e) {
                     System.out.println("Error: " + e.getMessage());
                 }
-
                 continue;
             }
 
-            //CREATE CHARGING POINT
+            // CREATE CHARGING POINT
             if (input.toLowerCase(Locale.ROOT).startsWith("create charging point")) {
-
                 String[] parts = input.split("\\s+");
-
-                while (parts.length < 7) {
+                if (parts.length < 7) {
                     System.out.println("Usage: create charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>");
-                    System.out.print("Enter full create charging point command: ");
-                    input = scanner.nextLine().trim();
-                    parts = input.split("\\s+");
+                    continue;
                 }
 
-                String cpId = parts[3];
-                String locationId = parts[4];
-                ChargingType type = ChargingType.valueOf(parts[5].toUpperCase(Locale.ROOT));
-                ChargingPointStatus status = ChargingPointStatus.valueOf(parts[6].toUpperCase(Locale.ROOT));
-
-                chargingPointManager.createChargingPoint(cpId, locationId, type, status);
-                System.out.println("Created charging point: " + cpId);
-
+                try {
+                    chargingPointManager.createChargingPoint(
+                            parts[3],
+                            parts[4],
+                            ChargingType.valueOf(parts[5].toUpperCase()),
+                            ChargingPointStatus.valueOf(parts[6].toUpperCase())
+                    );
+                    System.out.println("Charging point created.");
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Error: " + e.getMessage());
+                }
                 continue;
             }
 
-
-            // CREATE CUSTOMER
-            if (input.toLowerCase(Locale.ROOT).startsWith("create customer")) {
-
+            // DEFINE TARIFF
+            if (input.toLowerCase(Locale.ROOT).startsWith("define tariff")) {
                 String[] parts = input.split("\\s+");
-
-                while (parts.length < 4) {
-                    System.out.println("Usage: create customer <firstName> <lastName>");
-                    System.out.print("Enter full create customer command: ");
-                    input = scanner.nextLine().trim();
-                    parts = input.split("\\s+");
+                if (parts.length < 7) {
+                    System.out.println("Usage: define tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>");
+                    continue;
                 }
 
-                String firstName = parts[2].replace("_", " ");
-                String lastName = parts[3].replace("_", " ");
-
-                Customer created = customerManager.createCustomer(firstName, lastName);
-                System.out.println("Created: " + created);
-
+                try {
+                    locationManager.defineTariff(
+                            parts[2],
+                            Double.parseDouble(parts[3]),
+                            Double.parseDouble(parts[4]),
+                            Double.parseDouble(parts[5]),
+                            Double.parseDouble(parts[6])
+                    );
+                    System.out.println("Tariff defined.");
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                }
                 continue;
             }
 
-            System.out.println("Unknown command. Try: show locations | show charging points | show customers | create location | create charging point | create customer | exit");
+            System.out.println("Unknown operator command.");
         }
+    }
 
-        scanner.close();
+    // =========================================================
+    // CUSTOMER CLI
+    // =========================================================
+    private static void runCustomerCLI(
+            Scanner scanner,
+            LocationManager locationManager,
+            ChargingPointManager chargingPointManager,
+            CustomerManager customerManager
+    ) {
+        System.out.println("""
+                
+                CUSTOMER COMMANDS:
+                show locations
+                show charging points
+                create customer <firstName> <lastName>
+                back
+                """);
+
+        while (true) {
+            System.out.print("customer> ");
+            String input = scanner.nextLine().trim();
+
+            if (input.equalsIgnoreCase("back")) {
+                return;
+            }
+
+            if (input.equalsIgnoreCase("show locations")) {
+                locationManager.readAllLocations().forEach(System.out::println);
+                continue;
+            }
+
+            if (input.equalsIgnoreCase("show charging points")) {
+                chargingPointManager.readAllChargingPoints().forEach(System.out::println);
+                continue;
+            }
+
+            if (input.toLowerCase(Locale.ROOT).startsWith("create customer")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 4) {
+                    System.out.println("Usage: create customer <firstName> <lastName>");
+                    continue;
+                }
+
+                Customer created = customerManager.createCustomer(
+                        parts[2].replace("_", " "),
+                        parts[3].replace("_", " ")
+                );
+                System.out.println("Created: " + created);
+                continue;
+            }
+
+            System.out.println("Unknown customer command.");
+        }
     }
 }

@@ -22,4 +22,13 @@ public class CustomerManager {
     public List<Customer> readAllCustomers() {
         return new ArrayList<>(customers.values());
     }
+
+    public Customer findByName(String firstName, String lastName) {
+        return customers.values().stream()
+                .filter(c -> c.firstName().equalsIgnoreCase(firstName)
+                        && c.lastName().equalsIgnoreCase(lastName))
+                .findFirst()
+                .orElse(null);
+    }
+
 }

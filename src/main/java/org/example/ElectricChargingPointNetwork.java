@@ -35,6 +35,10 @@ public class ElectricChargingPointNetwork {
         locationManager.createLocation("L2", "Graz East", "Hauptstrasse 5");
         locationManager.createLocation("L3", "Graz North", "Hauptstrasse 7");
 
+        locationManager.defineTariff("L1",0.9,1,0.09,0.01);
+        locationManager.defineTariff("L2",0.6,1.5,0.06,0.15);
+        locationManager.defineTariff("L3",0.8,1.2,0.08,0.12);
+
         chargingPointManager.createChargingPoint("CP1", "L1", ChargingType.AC, ChargingPointStatus.AVAILABLE);
         chargingPointManager.createChargingPoint("CP2", "L1", ChargingType.DC, ChargingPointStatus.OCCUPIED);
         chargingPointManager.createChargingPoint("CP3", "L2", ChargingType.DC, ChargingPointStatus.OUT_OF_ORDER);
@@ -55,6 +59,7 @@ public class ElectricChargingPointNetwork {
                 7.80,
                 ChargingSessionStatus.FINISHED
         );
+
 
         // demo topups + invoice
         invoiceManager.addTopUp("T1", c1.id(), 20.00, parseIsoDateTime("2026-01-17T09:00"));
@@ -307,7 +312,8 @@ public class ElectricChargingPointNetwork {
                 topup <amount>
                 show balance
                 show invoices
-                start charging <chargingPointId>
+                start charging session <chargingPointId>
+                show session
                 back
                 """);
 
@@ -444,54 +450,162 @@ public class ElectricChargingPointNetwork {
                 System.out.println("Current balance: " + money(invoiceManager.readBalance(loggedInCustomer.id())));
                 continue;
             }
-
-            // =====================================================
-            // ✅ US-9: start charging (requires login)
-            // =====================================================
-            if (input.toLowerCase(Locale.ROOT).startsWith("start charging")) {
+            if (input.toLowerCase(Locale.ROOT).startsWith("start charging session")) {
                 if (loggedInCustomer == null) {
-                    System.out.println("Please login first. (login <firstName> <lastName>)");
+                    System.out.println("Please login first. Usage: login <firstName> <lastName>");
                     continue;
                 }
 
                 String[] parts = input.split("\\s+");
-                if (parts.length < 3) {
-                    System.out.println("Usage: start charging <chargingPointId>");
+                if (parts.length < 4) {
+                    System.out.println("Usage: start charging session <chargingPointId>");
                     continue;
                 }
 
-                String cpId = parts[2];
+                String cpId = parts[3];
                 ChargingPoint cp = chargingPointManager.readChargingPoint(cpId);
-
                 if (cp == null) {
                     System.out.println("Charging point not found: " + cpId);
                     continue;
                 }
 
                 if (cp.status() != ChargingPointStatus.AVAILABLE) {
-                    System.out.println("Charging point is not available. Status: " + cp.status());
+                    System.out.println("Charging point is not available: " + cp.status());
                     continue;
                 }
 
+                Location loc = locationManager.readLocation(cp.locationId());
+                if (loc == null || loc.tariff() == null) {
+                    System.out.println("No tariff defined for location " + cp.locationId() + ". Cannot start charging.");
+                    continue;
+                }
+
+                // Optional prepaid check (very simple): require at least 1€ balance
                 double balance = invoiceManager.readBalance(loggedInCustomer.id());
                 if (balance <= 0) {
-                    System.out.println("Insufficient balance. Please top up first.");
+                    System.out.println("Not enough balance. Please top up first.");
                     continue;
                 }
 
-                String sessionId = "S" + System.currentTimeMillis();
-                try {
-                    chargingSessionManager.createSession(sessionId, loggedInCustomer.id(), cpId, new Date());
-                    chargingPointManager.updateStatus(cpId, ChargingPointStatus.OCCUPIED);
+                ChargingSession session = chargingSessionManager.createSessionAutoId(loggedInCustomer.id(), cpId);
+                System.out.println("Session " + session.id() + " started at " + session.startTime() +
+                        " on charging point " + cpId + " (" + cp.type() + ").");
+                continue;
+            }
 
-                    System.out.println("Session started: " + sessionId);
-                    System.out.println("Charging point " + cpId + " is now OCCUPIED.");
-                } catch (IllegalArgumentException e) {
-                    System.out.println("Error: " + e.getMessage());
+            if (input.toLowerCase(Locale.ROOT).startsWith("show session")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 3) {
+                    System.out.println("Usage: show session <sessionId>");
+                    continue;
                 }
+
+                String sessionId = parts[2];
+                ChargingSession s = chargingSessionManager.readSession(sessionId);
+
+                if (s == null) {
+                    System.out.println("Session not found: " + sessionId);
+                    continue;
+                }
+
+                System.out.println(s);
+
+                // If ACTIVE -> show live values (duration + estimated kWh + estimated cost)
+                if (s.status() == ChargingSessionStatus.ACTIVE) {
+                    ChargingPoint cp = chargingPointManager.readChargingPoint(s.chargingPointId());
+                    Location loc = locationManager.readLocation(cp.locationId());
+
+                    long minutes = (new Date().getTime() - s.startTime().getTime()) / 60000;
+
+                    double kw = (cp.type() == ChargingType.AC) ? 11.0 : 50.0; // FIXED POWER
+                    double hours = minutes / 60.0;
+                    double kWh = kw * hours;
+
+                    Tariff t = loc.tariff();
+                    double cost = kWh * (cp.type() == ChargingType.AC ? t.pricePerKwhAC() : t.pricePerKwhDC())
+                            + minutes * (cp.type() == ChargingType.AC ? t.pricePerMinuteAC() : t.pricePerMinuteDC());
+
+                    System.out.println("Live:");
+                    System.out.println("  durationMin=" + minutes);
+                    System.out.println("  estKWh=" + String.format(Locale.ROOT, "%.2f", kWh));
+                    System.out.println("  estCost=" + String.format(Locale.ROOT, "%.2f", cost));
+                }
+                continue;
+            }
+
+            if (input.toLowerCase(Locale.ROOT).startsWith("stop charging session")) {
+                if (loggedInCustomer == null) {
+                    System.out.println("Please login first.");
+                    continue;
+                }
+
+                String[] parts = input.split("\\s+");
+                if (parts.length < 4) {
+                    System.out.println("Usage: stop charging session <sessionId>");
+                    continue;
+                }
+
+                String sessionId = parts[3];
+                ChargingSession s = chargingSessionManager.readSession(sessionId);
+
+                if (s == null) {
+                    System.out.println("Session not found: " + sessionId);
+                    continue;
+                }
+
+                if (!s.customerId().equals(loggedInCustomer.id())) {
+                    System.out.println("You can only stop your own sessions.");
+                    continue;
+                }
+
+                if (s.status() != ChargingSessionStatus.ACTIVE) {
+                    System.out.println("Session already finished.");
+                    continue;
+                }
+
+                ChargingPoint cp = chargingPointManager.readChargingPoint(s.chargingPointId());
+                Location loc = locationManager.readLocation(cp.locationId());
+                if (loc == null || loc.tariff() == null) {
+                    System.out.println("Tariff missing. Cannot calculate costs.");
+                    continue;
+                }
+
+                Date now = new Date();
+                long minutes = (now.getTime() - s.startTime().getTime()) / 60000;
+
+                double kw = (cp.type() == ChargingType.AC) ? 11.0 : 50.0; // FIXED POWER
+                double hours = minutes / 60.0;
+                double kWh = kw * hours;
+
+                Tariff t = loc.tariff();
+                double cost = kWh * (cp.type() == ChargingType.AC ? t.pricePerKwhAC() : t.pricePerKwhDC())
+                        + minutes * (cp.type() == ChargingType.AC ? t.pricePerMinuteAC() : t.pricePerMinuteDC());
+
+                // prepaid check: balance must cover cost
+                double balance = invoiceManager.readBalance(loggedInCustomer.id());
+                if (balance < cost) {
+                    System.out.println("Not enough balance to stop & bill. Please top up first.");
+                    System.out.println("Needed: " + String.format(Locale.ROOT, "%.2f", cost) +
+                            " | Balance: " + String.format(Locale.ROOT, "%.2f", balance));
+                    continue;
+                }
+
+                ChargingSession finished = chargingSessionManager.finishSession(sessionId, kWh, cost);
+                System.out.println("Session finished: " + finished);
+                System.out.println("Charged kWh=" + String.format(Locale.ROOT, "%.2f", kWh) +
+                        " totalCost=" + String.format(Locale.ROOT, "%.2f", cost));
+
+                // optional: create an invoice automatically (simple MVP)
+                String invoiceId = "I" + System.currentTimeMillis();
+                invoiceManager.addInvoice(invoiceId, loggedInCustomer.id(), finished, now, InvoiceStatus.PAID);
+                System.out.println("Invoice created: " + invoiceId);
 
                 continue;
             }
+
+
+
+
 
             System.out.println("Unknown customer command.");
         }

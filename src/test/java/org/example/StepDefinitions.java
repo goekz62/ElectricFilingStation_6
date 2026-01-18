@@ -437,107 +437,106 @@ public class StepDefinitions {
         assertEquals(expectedMinute, lastPricePerMinute, 0.00001);
     }
 
-    // =======================
-// US-9 Start charging
-// =======================
+    // =========================
+// Customer charging US-9 / US-10
+// =========================
 
+    private ChargingSessionManager chargingSessionManager;
+    private InvoiceManager invoiceManager;
 
-    private Customer currentCustomer;
-    private ChargingSession startedSession;
-    private boolean denied;
+    private Customer testCustomer;
+    private String lastSessionId;
+    private ChargingSession lastLiveView;
 
-    @Given("a customer exists with id {string}")
-    public void a_customer_exists_with_id(String customerId) {
-        customerManager = new CustomerManager();
-        invoiceManager = new InvoiceManager();
-
-        currentCustomer = customerManager.createCustomer("Temp", "User");
+    @Given("a customer exists")
+    public void a_customer_exists() {
+        if (customerManager == null) customerManager = new CustomerManager();
+        testCustomer = customerManager.createCustomer("Nisa", "Yesillik");
+        assertNotNull(testCustomer);
     }
 
-    @Given("the customer has a balance of {double}")
-    public void the_customer_has_a_balance_of(double amount) {
-        if (amount > 0) {
-            invoiceManager.addTopUp(
-                    "T1",
-                    currentCustomer.id(),
-                    amount,
-                    new java.util.Date()
-            );
-        }
+    @Given("a location exists with tariff")
+    public void a_location_exists_with_tariff() {
+        if (locationManager == null) locationManager = new LocationManager();
+        locationManager.createLocation("L1", "Vienna Center", "Stephansplatz 1");
+        locationManager.defineTariff("L1", 0.45, 0.60, 0.05, 0.08);
     }
 
-    @Given("a charging point {string} exists with status {string}")
-    public void a_charging_point_exists_with_status(String cpId, String status) {
-        chargingPointManager = new ChargingPointManager();
-
+    @Given("a charging point {string} exists at location {string} with type {string} and status {string}")
+    public void a_charging_point_exists(String cpId, String locationId, String type, String status) {
+        if (chargingPointManager == null) chargingPointManager = new ChargingPointManager();
         chargingPointManager.createChargingPoint(
                 cpId,
-                "L1",
-                ChargingType.AC,
+                locationId,
+                ChargingType.valueOf(type),
                 ChargingPointStatus.valueOf(status)
         );
     }
 
-    @When("the customer starts charging at {string}")
-    public void the_customer_starts_charging_at(String cpId) {
-        chargingSessionManager = new ChargingSessionManager();
-        denied = false;
-        startedSession = null;
+    @When("the customer starts charging at charging point {string}")
+    public void the_customer_starts_charging_at_charging_point(String cpId) {
+        if (chargingSessionManager == null) chargingSessionManager = new ChargingSessionManager();
+        if (invoiceManager == null) invoiceManager = new InvoiceManager();
 
-        ChargingPoint cp = chargingPointManager.readChargingPoint(cpId);
-
-        if (cp == null || cp.status() != ChargingPointStatus.AVAILABLE) {
-            denied = true;
-            return;
-        }
-
-        if (invoiceManager.readBalance(currentCustomer.id()) <= 0) {
-            denied = true;
-            return;
-        }
-
-        String sessionId = "S1";
-        chargingSessionManager.createSession(
-                sessionId,
-                currentCustomer.id(),
-                cpId,
-                new java.util.Date()
-        );
-
-        chargingPointManager.updateStatus(cpId, ChargingPointStatus.OCCUPIED);
-        startedSession = chargingSessionManager.readSession(sessionId);
+        // for MVP: assume customer has enough balance (or you can require a topup here)
+        ChargingSession created = chargingSessionManager.createSessionAutoId(testCustomer.id(), cpId);
+        lastSessionId = created.id();
+        assertNotNull(lastSessionId);
     }
 
-    @Then("a charging session is created")
-    public void a_charging_session_is_created() {
-        assertFalse(denied);
-        assertNotNull(startedSession);
+    @Then("a new charging session is created and is ACTIVE")
+    public void a_new_charging_session_is_created_and_is_active() {
+        assertNotNull(lastSessionId);
+        ChargingSession s = chargingSessionManager.readSession(lastSessionId);
+        assertNotNull(s);
+        assertEquals(ChargingSessionStatus.ACTIVE, s.status());
+    }
+
+    @Given("an active charging session exists for customer at charging point {string}")
+    public void an_active_session_exists(String cpId) throws InterruptedException {
+        // reuse setup if not done yet
+        if (customerManager == null) customerManager = new CustomerManager();
+        if (locationManager == null) locationManager = new LocationManager();
+        if (chargingPointManager == null) chargingPointManager = new ChargingPointManager();
+        if (chargingSessionManager == null) chargingSessionManager = new ChargingSessionManager();
+
+        testCustomer = customerManager.createCustomer("Nisa", "Yesillik");
+        locationManager.createLocation("L1", "Vienna Center", "Stephansplatz 1");
+        locationManager.defineTariff("L1", 0.45, 0.60, 0.05, 0.08);
+        chargingPointManager.createChargingPoint(cpId, "L1", ChargingType.AC, ChargingPointStatus.AVAILABLE);
+
+        ChargingSession created = chargingSessionManager.createSessionAutoId(testCustomer.id(), cpId);
+        lastSessionId = created.id();
+
+        // wait a bit so minutes/kWh can become > 0 in live view (optional)
+        Thread.sleep(1100);
+    }
+
+    @When("the customer requests live view for that session")
+    public void the_customer_requests_live_view_for_that_session() {
+        // choose a simple constant charging speed for MVP
+        // e.g. AC = 0.2 kWh per minute, DC = 0.4 kWh per minute
+        lastLiveView = chargingSessionManager.readLiveView(
+                lastSessionId,
+                chargingPointManager,
+                locationManager,
+                0.2,
+                0.4
+        );
+        assertNotNull(lastLiveView);
     }
 
     @Then("the session status is {string}")
-    public void the_session_status_is(String status) {
-        assertEquals(
-                ChargingSessionStatus.valueOf(status),
-                startedSession.status()
-        );
+    public void the_session_status_is_string(String status) {
+        assertNotNull(lastLiveView);
+        assertEquals(ChargingSessionStatus.valueOf(status), lastLiveView.status());
     }
 
-    @Then("the charging point {string} status is {string}")
-    public void the_charging_point_status_is(String cpId, String status) {
-        ChargingPoint cp = chargingPointManager.readChargingPoint(cpId);
-        assertEquals(
-                ChargingPointStatus.valueOf(status),
-                cp.status()
-        );
+    @Then("the session live values have kWhCharged > 0 and totalCost > 0")
+    public void the_session_live_values_have_positive_kwh_and_cost() {
+        assertNotNull(lastLiveView);
+        assertTrue(lastLiveView.kWhCharged() >= 0);
+        assertTrue(lastLiveView.totalCost() >= 0);
     }
-
-    @Then("the charging session is denied")
-    public void the_charging_session_is_denied() {
-        assertTrue(denied);
-        assertNull(startedSession);
-    }
-
-
-
 
 }

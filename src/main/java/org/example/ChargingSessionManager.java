@@ -5,6 +5,7 @@ import java.util.*;
 public class ChargingSessionManager {
 
     private final Map<String, ChargingSession> sessions = new LinkedHashMap<>();
+    private int nextId = 1;
 
     // Create an ACTIVE session (endTime/cost/kWh unknown yet)
     public void createSession(String id, String customerId, String chargingPointId, Date startTime) {
@@ -39,6 +40,31 @@ public class ChargingSessionManager {
                 totalCost,
                 ChargingSessionStatus.FINISHED
         ));
+    }
+
+    // ✅ NEW: auto-generate id (S1, S2, ...) and start time = now
+    public ChargingSession createSessionAutoId(String customerId, String chargingPointId) {
+        String id;
+        do {
+            id = "S" + nextId++;
+        } while (sessions.containsKey(id));
+
+        createSession(id, customerId, chargingPointId, new Date());
+        return sessions.get(id);
+    }
+
+    // ✅ NEW: finish session using existing session data
+    public ChargingSession finishSession(String sessionId, double kWhCharged, double totalCost) {
+        ChargingSession s = sessions.get(sessionId);
+        if (s == null) {
+            throw new IllegalArgumentException("Session not found: " + sessionId);
+        }
+        if (s.status() != ChargingSessionStatus.ACTIVE) {
+            throw new IllegalArgumentException("Session is not ACTIVE: " + sessionId);
+        }
+
+        endSession(sessionId, new Date(), kWhCharged, totalCost);
+        return sessions.get(sessionId);
     }
 
     // Helper for tests: directly create finished session

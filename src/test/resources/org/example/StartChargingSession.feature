@@ -26,3 +26,18 @@ Feature: Start charging session
     And a charging point "CP3" exists with status "AVAILABLE"
     When the customer starts charging at "CP3"
     Then the charging session is denied
+
+
+  Scenario: start charging session at a charging point (US-9)
+    Given a customer exists
+    And a location exists with tariff
+    And a charging point "CP1" exists at location "L1" with type "AC" and status "AVAILABLE"
+    When the customer starts charging at charging point "CP1"
+    Then a new charging session is created and is ACTIVE
+
+  Scenario: view real-time charging session information (US-10)
+    Given an active charging session exists for customer at charging point "CP1"
+    When the customer requests live view for that session
+    Then the session status is "ACTIVE"
+    And the session live values have kWhCharged > 0 and totalCost > 0
+

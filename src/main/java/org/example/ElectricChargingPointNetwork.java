@@ -22,7 +22,6 @@ public class ElectricChargingPointNetwork {
         CustomerManager customerManager = new CustomerManager();
         ChargingSessionManager chargingSessionManager = new ChargingSessionManager();
 
-        // ✅ NEW: US-12 manager
         InvoiceManager invoiceManager = new InvoiceManager();
 
         // Seed data
@@ -51,7 +50,7 @@ public class ElectricChargingPointNetwork {
                 ChargingSessionStatus.FINISHED
         );
 
-        // ✅ US-12 DEMO DATA (top-ups + invoices for customer C1)
+        // Seed top-ups and invoice for operator demo
         invoiceManager.addTopUp("T1", c1.id(), 20.00, parseIsoDateTime("2026-01-17T09:00"));
         invoiceManager.addTopUp("T2", c1.id(), 15.00, parseIsoDateTime("2026-01-17T09:30"));
 
@@ -82,7 +81,8 @@ public class ElectricChargingPointNetwork {
             }
 
             if (role.equals("customer")) {
-                runCustomerCLI(scanner, locationManager, chargingPointManager, customerManager);
+                // ✅ pass invoiceManager into customer CLI
+                runCustomerCLI(scanner, locationManager, chargingPointManager, customerManager, invoiceManager);
                 continue;
             }
 
@@ -101,7 +101,7 @@ public class ElectricChargingPointNetwork {
             ChargingPointManager chargingPointManager,
             CustomerManager customerManager,
             ChargingSessionManager chargingSessionManager,
-            InvoiceManager invoiceManager // ✅ NEW
+            InvoiceManager invoiceManager
     ) {
         System.out.println("""
 
@@ -175,7 +175,7 @@ public class ElectricChargingPointNetwork {
                 continue;
             }
 
-            // ✅ US-12: VIEW BILLING HISTORY
+            // US-12: VIEW BILLING HISTORY
             if (input.toLowerCase(Locale.ROOT).startsWith("show billing")) {
                 String[] parts = input.split("\\s+");
                 if (parts.length < 3) {
@@ -209,6 +209,7 @@ public class ElectricChargingPointNetwork {
                     invoices.forEach(inv -> System.out.println("  " + inv));
                 }
 
+                System.out.println("\nBalance: " + String.format(Locale.ROOT, "%.2f", invoiceManager.readBalance(customerId)));
                 continue;
             }
 
@@ -310,13 +311,14 @@ public class ElectricChargingPointNetwork {
     }
 
     // =========================================================
-    // CUSTOMER CLI
+    // CUSTOMER CLI (NOW WITH TOP-UP)
     // =========================================================
     private static void runCustomerCLI(
             Scanner scanner,
             LocationManager locationManager,
             ChargingPointManager chargingPointManager,
-            CustomerManager customerManager
+            CustomerManager customerManager,
+            InvoiceManager invoiceManager // ✅ NEW
     ) {
         System.out.println("""
 
@@ -324,6 +326,10 @@ public class ElectricChargingPointNetwork {
                 show locations
                 show charging points
                 create customer <firstName> <lastName>
+
+                topup <customerId> <amount>          (US-3)
+                balance <customerId>                 (US-3)
+
                 back
                 """);
 
@@ -357,6 +363,58 @@ public class ElectricChargingPointNetwork {
                         parts[3].replace("_", " ")
                 );
                 System.out.println("Created: " + created);
+                continue;
+            }
+
+            // ✅ US-3: TOP UP
+            if (input.toLowerCase(Locale.ROOT).startsWith("topup")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 3) {
+                    System.out.println("Usage: topup <customerId> <amount>");
+                    continue;
+                }
+
+                String customerId = parts[1];
+                Customer c = customerManager.readCustomer(customerId);
+                if (c == null) {
+                    System.out.println("Customer not found: " + customerId);
+                    continue;
+                }
+
+                try {
+                    double amount = Double.parseDouble(parts[2]);
+                    // simple ID generation: T + current timestamp
+                    String topUpId = "T" + System.currentTimeMillis();
+
+                    invoiceManager.addTopUp(topUpId, customerId, amount, new Date());
+                    System.out.println("Top-up successful. New balance: " +
+                            String.format(Locale.ROOT, "%.2f", invoiceManager.readBalance(customerId)));
+                } catch (NumberFormatException e) {
+                    System.out.println("Amount must be a number (example: 20.00)");
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Error: " + e.getMessage());
+                }
+
+                continue;
+            }
+
+            // ✅ US-3: BALANCE
+            if (input.toLowerCase(Locale.ROOT).startsWith("balance")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 2) {
+                    System.out.println("Usage: balance <customerId>");
+                    continue;
+                }
+
+                String customerId = parts[1];
+                Customer c = customerManager.readCustomer(customerId);
+                if (c == null) {
+                    System.out.println("Customer not found: " + customerId);
+                    continue;
+                }
+
+                System.out.println("Balance for " + customerId + ": " +
+                        String.format(Locale.ROOT, "%.2f", invoiceManager.readBalance(customerId)));
                 continue;
             }
 

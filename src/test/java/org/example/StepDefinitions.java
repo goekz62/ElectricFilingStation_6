@@ -374,4 +374,35 @@ public class StepDefinitions {
         assertEquals(chargingPointId, invoice.session().chargingPointId());
         assertEquals(totalCost, invoice.session().totalCost(), 0.0001);
     }
+    private String currentCustomerId;
+
+    @Given("a customer exists with id {string}")
+    public void a_customer_exists_with_id(String customerId) {
+        invoiceManager = new InvoiceManager();
+        currentCustomerId = customerId;
+        assertNotNull(currentCustomerId);
+    }
+
+    @Given("customer {string} has no previous top-ups")
+    public void customer_has_no_previous_topups(String customerId) {
+        List<TopUp> topUps = invoiceManager.readTopUps(customerId);
+        assertTrue(topUps.isEmpty());
+    }
+
+    @When("customer {string} tops up amount {double}")
+    public void customer_tops_up_amount(String customerId, double amount) {
+        invoiceManager.addTopUp(
+                "T1",
+                customerId,
+                amount,
+                new Date()
+        );
+    }
+
+    @Then("customer {string} balance should be {double}")
+    public void customer_balance_should_be(String customerId, double expectedBalance) {
+        double actualBalance = invoiceManager.readBalance(customerId);
+        assertEquals(expectedBalance, actualBalance, 0.0001);
+    }
+
 }

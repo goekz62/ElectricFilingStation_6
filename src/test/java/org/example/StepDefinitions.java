@@ -437,6 +437,107 @@ public class StepDefinitions {
         assertEquals(expectedMinute, lastPricePerMinute, 0.00001);
     }
 
+    // =======================
+// US-9 Start charging
+// =======================
+
+
+    private Customer currentCustomer;
+    private ChargingSession startedSession;
+    private boolean denied;
+
+    @Given("a customer exists with id {string}")
+    public void a_customer_exists_with_id(String customerId) {
+        customerManager = new CustomerManager();
+        invoiceManager = new InvoiceManager();
+
+        currentCustomer = customerManager.createCustomer("Temp", "User");
+    }
+
+    @Given("the customer has a balance of {double}")
+    public void the_customer_has_a_balance_of(double amount) {
+        if (amount > 0) {
+            invoiceManager.addTopUp(
+                    "T1",
+                    currentCustomer.id(),
+                    amount,
+                    new java.util.Date()
+            );
+        }
+    }
+
+    @Given("a charging point {string} exists with status {string}")
+    public void a_charging_point_exists_with_status(String cpId, String status) {
+        chargingPointManager = new ChargingPointManager();
+
+        chargingPointManager.createChargingPoint(
+                cpId,
+                "L1",
+                ChargingType.AC,
+                ChargingPointStatus.valueOf(status)
+        );
+    }
+
+    @When("the customer starts charging at {string}")
+    public void the_customer_starts_charging_at(String cpId) {
+        chargingSessionManager = new ChargingSessionManager();
+        denied = false;
+        startedSession = null;
+
+        ChargingPoint cp = chargingPointManager.readChargingPoint(cpId);
+
+        if (cp == null || cp.status() != ChargingPointStatus.AVAILABLE) {
+            denied = true;
+            return;
+        }
+
+        if (invoiceManager.readBalance(currentCustomer.id()) <= 0) {
+            denied = true;
+            return;
+        }
+
+        String sessionId = "S1";
+        chargingSessionManager.createSession(
+                sessionId,
+                currentCustomer.id(),
+                cpId,
+                new java.util.Date()
+        );
+
+        chargingPointManager.updateStatus(cpId, ChargingPointStatus.OCCUPIED);
+        startedSession = chargingSessionManager.readSession(sessionId);
+    }
+
+    @Then("a charging session is created")
+    public void a_charging_session_is_created() {
+        assertFalse(denied);
+        assertNotNull(startedSession);
+    }
+
+    @Then("the session status is {string}")
+    public void the_session_status_is(String status) {
+        assertEquals(
+                ChargingSessionStatus.valueOf(status),
+                startedSession.status()
+        );
+    }
+
+    @Then("the charging point {string} status is {string}")
+    public void the_charging_point_status_is(String cpId, String status) {
+        ChargingPoint cp = chargingPointManager.readChargingPoint(cpId);
+        assertEquals(
+                ChargingPointStatus.valueOf(status),
+                cp.status()
+        );
+    }
+
+    @Then("the charging session is denied")
+    public void the_charging_session_is_denied() {
+        assertTrue(denied);
+        assertNull(startedSession);
+    }
+
+
 
 
 }

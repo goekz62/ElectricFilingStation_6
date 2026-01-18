@@ -16,6 +16,13 @@ public class ElectricChargingPointNetwork {
         return Date.from(ldt.atZone(ZoneId.systemDefault()).toInstant());
     }
 
+    private static String money(double v) {
+        return String.format(Locale.ROOT, "%.2f", v);
+    }
+
+    // ✅ "Login state" for the customer CLI
+    private static Customer loggedInCustomer = null;
+
     public static void main(String[] args) {
         LocationManager locationManager = new LocationManager();
         ChargingPointManager chargingPointManager = new ChargingPointManager();
@@ -23,7 +30,7 @@ public class ElectricChargingPointNetwork {
         ChargingSessionManager chargingSessionManager = new ChargingSessionManager();
         InvoiceManager invoiceManager = new InvoiceManager();
 
-        // ---------------- SEED DATA ----------------
+        // Seed data
         locationManager.createLocation("L1", "Vienna Center", "Stephansplatz 1");
         locationManager.createLocation("L2", "Graz East", "Hauptstrasse 5");
         locationManager.createLocation("L3", "Graz North", "Hauptstrasse 7");
@@ -37,10 +44,7 @@ public class ElectricChargingPointNetwork {
         customerManager.createCustomer("Katharina", "Weinberger");
         customerManager.createCustomer("Franz", "Steininger");
 
-        locationManager.defineTariff("L1", 0.45, 0.60, 0.05, 0.08);
-        locationManager.defineTariff("L2", 0.40, 0.55, 0.04, 0.07);
-
-        // demo session for operator view (US-11)
+        // demo session
         chargingSessionManager.createFinishedSession(
                 "S1",
                 c1.id(),
@@ -52,17 +56,14 @@ public class ElectricChargingPointNetwork {
                 ChargingSessionStatus.FINISHED
         );
 
-        // seed billing demo (US-12 / customer invoices)
+        // demo topups + invoice
         invoiceManager.addTopUp("T1", c1.id(), 20.00, parseIsoDateTime("2026-01-17T09:00"));
         invoiceManager.addTopUp("T2", c1.id(), 15.00, parseIsoDateTime("2026-01-17T09:30"));
-
         ChargingSession s1 = chargingSessionManager.readSession("S1");
         invoiceManager.addInvoice("I1", c1.id(), s1, parseIsoDateTime("2026-01-17T10:30"), InvoiceStatus.PAID);
-        // -------------------------------------------
 
         Scanner scanner = new Scanner(System.in);
 
-        // ROLE SELECTION
         while (true) {
             System.out.println("\nWho are you? (operator | customer | exit)");
             String role = scanner.nextLine().trim().toLowerCase(Locale.ROOT);
@@ -78,11 +79,11 @@ public class ElectricChargingPointNetwork {
             }
 
             if (role.equals("customer")) {
-                runCustomerCLI(scanner, locationManager, chargingPointManager, customerManager, invoiceManager);
+                runCustomerCLI(scanner, locationManager, chargingPointManager, customerManager, chargingSessionManager, invoiceManager);
                 continue;
             }
 
-            System.out.println("Unknown role. Type: operator | customer | exit");
+            System.out.println("Unknown role.");
         }
 
         scanner.close();
@@ -99,16 +100,32 @@ public class ElectricChargingPointNetwork {
             ChargingSessionManager chargingSessionManager,
             InvoiceManager invoiceManager
     ) {
-        printOperatorHelp();
+        System.out.println("""
+                
+                OPERATOR COMMANDS:
+                show locations
+                show charging points
+                show customers
+                show prices
+                
+                show sessions
+                show session <sessionId>
+                
+                show billing <customerId>   (US-12)
+                
+                create location <id> <name_with_underscores> <address_with_underscores>
+                create charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
+                define tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>
+                update tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>
+                back
+                """);
 
         while (true) {
             System.out.print("operator> ");
             String input = scanner.nextLine().trim();
 
             if (input.equalsIgnoreCase("back")) return;
-            if (input.equalsIgnoreCase("help")) { printOperatorHelp(); continue; }
 
-            // SHOW
             if (input.equalsIgnoreCase("show locations")) {
                 locationManager.readAllLocations().forEach(System.out::println);
                 continue;
@@ -136,7 +153,6 @@ public class ElectricChargingPointNetwork {
                 continue;
             }
 
-            // SESSIONS
             if (input.equalsIgnoreCase("show sessions")) {
                 chargingSessionManager.readAllSessions().forEach(System.out::println);
                 continue;
@@ -153,7 +169,6 @@ public class ElectricChargingPointNetwork {
                 continue;
             }
 
-            // BILLING (US-12)
             if (input.toLowerCase(Locale.ROOT).startsWith("show billing")) {
                 String[] parts = input.split("\\s+");
                 if (parts.length < 3) {
@@ -181,11 +196,10 @@ public class ElectricChargingPointNetwork {
                 if (invoices.isEmpty()) System.out.println("  (none)");
                 else invoices.forEach(inv -> System.out.println("  " + inv));
 
-                System.out.println("\nBalance: " + String.format(Locale.ROOT, "%.2f", invoiceManager.readBalance(customerId)));
+                System.out.println("\nBalance: " + money(invoiceManager.readBalance(customerId)));
                 continue;
             }
 
-            // CREATE LOCATION
             if (input.toLowerCase(Locale.ROOT).startsWith("create location")) {
                 String[] parts = input.split("\\s+");
                 if (parts.length < 5) {
@@ -194,11 +208,7 @@ public class ElectricChargingPointNetwork {
                 }
 
                 try {
-                    locationManager.createLocation(
-                            parts[2],
-                            parts[3].replace("_", " "),
-                            parts[4].replace("_", " ")
-                    );
+                    locationManager.createLocation(parts[2], parts[3].replace("_", " "), parts[4].replace("_", " "));
                     System.out.println("Location created.");
                 } catch (IllegalArgumentException e) {
                     System.out.println("Error: " + e.getMessage());
@@ -206,7 +216,6 @@ public class ElectricChargingPointNetwork {
                 continue;
             }
 
-            // CREATE CHARGING POINT
             if (input.toLowerCase(Locale.ROOT).startsWith("create charging point")) {
                 String[] parts = input.split("\\s+");
                 if (parts.length < 7) {
@@ -215,6 +224,7 @@ public class ElectricChargingPointNetwork {
                 }
 
                 try {
+                    // ✅ IMPORTANT: parts[3] is the id because the command is 3 words: create charging point ...
                     chargingPointManager.createChargingPoint(
                             parts[3],
                             parts[4],
@@ -228,14 +238,12 @@ public class ElectricChargingPointNetwork {
                 continue;
             }
 
-            // DEFINE TARIFF (US-6)
             if (input.toLowerCase(Locale.ROOT).startsWith("define tariff")) {
                 String[] parts = input.split("\\s+");
                 if (parts.length < 7) {
                     System.out.println("Usage: define tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>");
                     continue;
                 }
-
                 try {
                     locationManager.defineTariff(
                             parts[2],
@@ -251,14 +259,12 @@ public class ElectricChargingPointNetwork {
                 continue;
             }
 
-            // UPDATE TARIFF (US-7)
             if (input.toLowerCase(Locale.ROOT).startsWith("update tariff")) {
                 String[] parts = input.split("\\s+");
                 if (parts.length < 7) {
                     System.out.println("Usage: update tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>");
                     continue;
                 }
-
                 try {
                     locationManager.updateTariff(
                             parts[2],
@@ -274,64 +280,55 @@ public class ElectricChargingPointNetwork {
                 continue;
             }
 
-            System.out.println("Unknown operator command. Type 'help' to see commands.");
+            System.out.println("Unknown operator command.");
         }
     }
 
-    private static void printOperatorHelp() {
-        System.out.println("""
-
-                OPERATOR COMMANDS:
-                help
-                back
-                show locations
-                show charging points
-                show customers
-                show prices
-                show sessions
-                show session <sessionId>
-                show billing <customerId>
-                create location <id> <name_with_underscores> <address_with_underscores>
-                create charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
-                define tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>
-                update tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>
-                """);
-    }
-
     // =========================================================
-    // CUSTOMER CLI (WITH LOGIN)
+    // CUSTOMER CLI (LOGIN + TOPUP + BALANCE + INVOICES + US-9)
     // =========================================================
     private static void runCustomerCLI(
             Scanner scanner,
             LocationManager locationManager,
             ChargingPointManager chargingPointManager,
             CustomerManager customerManager,
+            ChargingSessionManager chargingSessionManager,
             InvoiceManager invoiceManager
     ) {
-        Customer loggedIn = null;
-
-        printCustomerHelp();
+        System.out.println("""
+                
+                CUSTOMER COMMANDS:
+                create customer <firstName> <lastName>
+                login <firstName> <lastName>
+                logout
+                show locations
+                show charging points
+                show prices <locationId>
+                topup <amount>
+                show balance
+                show invoices
+                start charging <chargingPointId>
+                back
+                """);
 
         while (true) {
             System.out.print("customer> ");
             String input = scanner.nextLine().trim();
 
             if (input.equalsIgnoreCase("back")) return;
-            if (input.equalsIgnoreCase("help")) { printCustomerHelp(); continue; }
 
-            // CREATE CUSTOMER ALWAYS ALLOWED
             if (input.toLowerCase(Locale.ROOT).startsWith("create customer")) {
                 String[] parts = input.split("\\s+");
                 if (parts.length < 4) {
                     System.out.println("Usage: create customer <firstName> <lastName>");
                     continue;
                 }
-                Customer created = customerManager.createCustomer(parts[2], parts[3]);
+                Customer created = customerManager.createCustomer(parts[2].replace("_", " "), parts[3].replace("_", " "));
                 System.out.println("Created: " + created);
                 continue;
             }
 
-            // LOGIN
+            // ✅ LOGIN by first+last name
             if (input.toLowerCase(Locale.ROOT).startsWith("login")) {
                 String[] parts = input.split("\\s+");
                 if (parts.length < 3) {
@@ -339,45 +336,70 @@ public class ElectricChargingPointNetwork {
                     continue;
                 }
 
-                loggedIn = customerManager.readAllCustomers().stream()
-                        .filter(c -> c.firstName().equalsIgnoreCase(parts[1]) &&
-                                c.lastName().equalsIgnoreCase(parts[2]))
+                String fn = parts[1].replace("_", " ");
+                String ln = parts[2].replace("_", " ");
+
+                Customer found = customerManager.readAllCustomers().stream()
+                        .filter(c -> c.firstName().equalsIgnoreCase(fn) && c.lastName().equalsIgnoreCase(ln))
                         .findFirst()
                         .orElse(null);
 
-                if (loggedIn == null) System.out.println("Customer not found.");
-                else System.out.println("Logged in as: " + loggedIn);
-
+                if (found == null) {
+                    System.out.println("No customer found for: " + fn + " " + ln);
+                } else {
+                    loggedInCustomer = found;
+                    System.out.println("Logged in as: " + loggedInCustomer);
+                }
                 continue;
             }
 
-            // LOGOUT
             if (input.equalsIgnoreCase("logout")) {
-                loggedIn = null;
+                loggedInCustomer = null;
                 System.out.println("Logged out.");
                 continue;
             }
 
-            // commands below need login
-            if (loggedIn == null) {
-                System.out.println("Please login first (login <firstName> <lastName>).");
-                continue;
-            }
-
-            // SHOW LOCATIONS
             if (input.equalsIgnoreCase("show locations")) {
                 locationManager.readAllLocations().forEach(System.out::println);
                 continue;
             }
 
-            // SHOW CHARGING POINTS
             if (input.equalsIgnoreCase("show charging points")) {
                 chargingPointManager.readAllChargingPoints().forEach(System.out::println);
                 continue;
             }
 
-            // TOPUP (US-3)
+            // US-7 customer: view price for a location
+            if (input.toLowerCase(Locale.ROOT).startsWith("show prices")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 3) {
+                    System.out.println("Usage: show prices <locationId>");
+                    continue;
+                }
+
+                String locationId = parts[2];
+                Location loc = locationManager.readLocation(locationId);
+                if (loc == null) {
+                    System.out.println("Location not found: " + locationId);
+                    continue;
+                }
+
+                System.out.println(loc.id() + " - " + loc.name());
+                if (loc.tariff() == null) {
+                    System.out.println("  Tariff: NOT DEFINED");
+                } else {
+                    System.out.println("  Tariff: " + loc.tariff());
+                }
+                continue;
+            }
+
+            // ✅ US-3 TopUp (requires login)
             if (input.toLowerCase(Locale.ROOT).startsWith("topup")) {
+                if (loggedInCustomer == null) {
+                    System.out.println("Please login first. (login <firstName> <lastName>)");
+                    continue;
+                }
+
                 String[] parts = input.split("\\s+");
                 if (parts.length < 2) {
                     System.out.println("Usage: topup <amount>");
@@ -387,98 +409,91 @@ public class ElectricChargingPointNetwork {
                 try {
                     double amount = Double.parseDouble(parts[1]);
                     String topUpId = "T" + System.currentTimeMillis();
-                    invoiceManager.addTopUp(topUpId, loggedIn.id(), amount, new Date());
+                    invoiceManager.addTopUp(topUpId, loggedInCustomer.id(), amount, new Date());
 
-                    System.out.println("Top-up successful.");
-                    System.out.println("Balance: " + String.format(Locale.ROOT, "%.2f", invoiceManager.readBalance(loggedIn.id())));
-                } catch (Exception e) {
+                    System.out.println("Top-up successful. New balance: " + money(invoiceManager.readBalance(loggedInCustomer.id())));
+                } catch (NumberFormatException e) {
+                    System.out.println("Amount must be a number (example: 20.00)");
+                } catch (IllegalArgumentException e) {
                     System.out.println("Error: " + e.getMessage());
                 }
                 continue;
             }
 
-            // BALANCE
+            // ✅ Balance (requires login)
             if (input.equalsIgnoreCase("show balance")) {
-                System.out.println("Balance: " + String.format(Locale.ROOT, "%.2f", invoiceManager.readBalance(loggedIn.id())));
+                if (loggedInCustomer == null) {
+                    System.out.println("Please login first. (login <firstName> <lastName>)");
+                    continue;
+                }
+                System.out.println("Balance: " + money(invoiceManager.readBalance(loggedInCustomer.id())));
                 continue;
             }
 
-            // SHOW INVOICES (US-4)
+            // ✅ US-4 Invoices (requires login)
             if (input.equalsIgnoreCase("show invoices")) {
-                var invoices = invoiceManager.readInvoices(loggedIn.id());
+                if (loggedInCustomer == null) {
+                    System.out.println("Please login first. (login <firstName> <lastName>)");
+                    continue;
+                }
+
+                var invoices = invoiceManager.readInvoices(loggedInCustomer.id());
                 if (invoices.isEmpty()) System.out.println("(no invoices)");
                 else invoices.forEach(System.out::println);
 
-                System.out.println("Balance: " + String.format(Locale.ROOT, "%.2f", invoiceManager.readBalance(loggedIn.id())));
+                System.out.println("Current balance: " + money(invoiceManager.readBalance(loggedInCustomer.id())));
                 continue;
             }
-            if (input.toLowerCase(Locale.ROOT).startsWith("show price")) {
+
+            // =====================================================
+            // ✅ US-9: start charging (requires login)
+            // =====================================================
+            if (input.toLowerCase(Locale.ROOT).startsWith("start charging")) {
+                if (loggedInCustomer == null) {
+                    System.out.println("Please login first. (login <firstName> <lastName>)");
+                    continue;
+                }
+
                 String[] parts = input.split("\\s+");
                 if (parts.length < 3) {
-                    System.out.println("Usage: show price <chargingPointId>");
+                    System.out.println("Usage: start charging <chargingPointId>");
                     continue;
                 }
 
                 String cpId = parts[2];
-
-                ChargingPoint cp = chargingPointManager.readAllChargingPoints().stream()
-                        .filter(p -> p.id().equalsIgnoreCase(cpId))
-                        .findFirst()
-                        .orElse(null);
+                ChargingPoint cp = chargingPointManager.readChargingPoint(cpId);
 
                 if (cp == null) {
                     System.out.println("Charging point not found: " + cpId);
                     continue;
                 }
 
-                Location loc = locationManager.readLocation(cp.locationId());
-                if (loc == null) {
-                    System.out.println("Location not found: " + cp.locationId());
+                if (cp.status() != ChargingPointStatus.AVAILABLE) {
+                    System.out.println("Charging point is not available. Status: " + cp.status());
                     continue;
                 }
 
-                if (loc.tariff() == null) {
-                    System.out.println("Tariff not defined for location " + loc.id());
+                double balance = invoiceManager.readBalance(loggedInCustomer.id());
+                if (balance <= 0) {
+                    System.out.println("Insufficient balance. Please top up first.");
                     continue;
                 }
 
-                Tariff t = loc.tariff();
-                double priceKwh;
-                double priceMin;
+                String sessionId = "S" + System.currentTimeMillis();
+                try {
+                    chargingSessionManager.createSession(sessionId, loggedInCustomer.id(), cpId, new Date());
+                    chargingPointManager.updateStatus(cpId, ChargingPointStatus.OCCUPIED);
 
-                if (cp.type() == ChargingType.AC) {
-                    priceKwh = t.pricePerKwhAC();
-                    priceMin = t.pricePerMinuteAC();
-                } else {
-                    priceKwh = t.pricePerKwhDC();
-                    priceMin = t.pricePerMinuteDC();
+                    System.out.println("Session started: " + sessionId);
+                    System.out.println("Charging point " + cpId + " is now OCCUPIED.");
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Error: " + e.getMessage());
                 }
 
-                System.out.println(loc.id() + " - " + loc.name());
-                System.out.println("Charging point: " + cp.id() + " (" + cp.type() + ")");
-                System.out.println("Tariff: kWh=" + String.format(Locale.ROOT, "%.2f", priceKwh)
-                        + ", minute=" + String.format(Locale.ROOT, "%.2f", priceMin));
                 continue;
             }
 
-            System.out.println("Unknown customer command. Type 'help' to see commands.");
+            System.out.println("Unknown customer command.");
         }
-    }
-
-    private static void printCustomerHelp() {
-        System.out.println("""
-
-                CUSTOMER COMMANDS:
-                help
-                back
-                create customer <firstName> <lastName>
-                login <firstName> <lastName>
-                logout
-                show locations
-                show charging points
-                topup <amount>
-                show balance
-                show invoices
-                """);
     }
 }

@@ -1,7 +1,9 @@
 package org.example;
+
 import java.util.*;
 
 public class ChargingPointManager {
+
     private final Map<String, ChargingPoint> points = new LinkedHashMap<>();
 
     public void createChargingPoint(
@@ -28,5 +30,18 @@ public class ChargingPointManager {
         return points.values().stream()
                 .filter(p -> p.locationId().equals(locationId))
                 .count();
+    }
+
+    // ✅ REQUIRED FOR US-9
+    public void updateStatus(String chargingPointId, ChargingPointStatus newStatus) {
+        ChargingPoint cp = points.get(chargingPointId);
+        if (cp == null) {
+            throw new IllegalArgumentException("Charging point not found: " + chargingPointId);
+        }
+
+        points.put(
+                chargingPointId,
+                new ChargingPoint(cp.id(), cp.locationId(), cp.type(), newStatus)
+        );
     }
 }

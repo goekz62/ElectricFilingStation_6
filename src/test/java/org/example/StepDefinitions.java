@@ -23,21 +23,19 @@ public class StepDefinitions {
 
     private Map<String, Tariff> lastPrices;
 
-    // US11
     private ChargingSessionManager chargingSessionManager;
     private ChargingSession lastSession;
 
-    // US12
     private InvoiceManager invoiceManager;
     private List<TopUp> lastTopUps;
     private List<Invoice> lastInvoices;
 
-    // auto-generated customer IDs
     private Customer createdCustomer;
+    private double lastPricePerKwh;
+    private double lastPricePerMinute;
+    private ChargingPoint lastSelectedChargingPoint;
 
-    // =========================================================
-    // Helpers
-    // =========================================================
+
     private static final DateTimeFormatter ISO_DT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
 
     private Date parseIsoDateTime(String text) {
@@ -404,5 +402,41 @@ public class StepDefinitions {
         double actualBalance = invoiceManager.readBalance(customerId);
         assertEquals(expectedBalance, actualBalance, 0.0001);
     }
+    @When("the customer requests current price for charging point {string}")
+    public void the_customer_requests_current_price_for_charging_point(String chargingPointId) {
+        assertNotNull(chargingPointManager, "chargingPointManager must be initialized");
+        assertNotNull(locationManager, "locationManager must be initialized");
+
+        // Find charging point (no need for a readChargingPoint method)
+        lastSelectedChargingPoint = chargingPointManager.readAllChargingPoints().stream()
+                .filter(cp -> cp.id().equals(chargingPointId))
+                .findFirst()
+                .orElse(null);
+
+        assertNotNull(lastSelectedChargingPoint, "Charging point not found: " + chargingPointId);
+
+        Location loc = locationManager.readLocation(lastSelectedChargingPoint.locationId());
+        assertNotNull(loc, "Location not found: " + lastSelectedChargingPoint.locationId());
+        assertNotNull(loc.tariff(), "Tariff not defined for location: " + loc.id());
+
+        Tariff t = loc.tariff();
+
+        if (lastSelectedChargingPoint.type() == ChargingType.AC) {
+            lastPricePerKwh = t.pricePerKwhAC();
+            lastPricePerMinute = t.pricePerMinuteAC();
+        } else { // DC
+            lastPricePerKwh = t.pricePerKwhDC();
+            lastPricePerMinute = t.pricePerMinuteDC();
+        }
+    }
+
+    @Then("the system shows price per kWh {double} and price per minute {double}")
+    public void the_system_shows_price_per_kwh_and_price_per_minute(double expectedKwh, double expectedMinute) {
+        assertNotNull(lastSelectedChargingPoint, "No charging point selected");
+        assertEquals(expectedKwh, lastPricePerKwh, 0.00001);
+        assertEquals(expectedMinute, lastPricePerMinute, 0.00001);
+    }
+
+
 
 }

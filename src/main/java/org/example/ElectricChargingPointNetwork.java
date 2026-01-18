@@ -37,6 +37,9 @@ public class ElectricChargingPointNetwork {
         customerManager.createCustomer("Katharina", "Weinberger");
         customerManager.createCustomer("Franz", "Steininger");
 
+        locationManager.defineTariff("L1", 0.45, 0.60, 0.05, 0.08);
+        locationManager.defineTariff("L2", 0.40, 0.55, 0.04, 0.07);
+
         // demo session for operator view (US-11)
         chargingSessionManager.createFinishedSession(
                 "S1",
@@ -281,20 +284,15 @@ public class ElectricChargingPointNetwork {
                 OPERATOR COMMANDS:
                 help
                 back
-
                 show locations
                 show charging points
                 show customers
                 show prices
-
                 show sessions
                 show session <sessionId>
-
                 show billing <customerId>
-
                 create location <id> <name_with_underscores> <address_with_underscores>
                 create charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
-
                 define tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>
                 update tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>
                 """);
@@ -400,7 +398,7 @@ public class ElectricChargingPointNetwork {
             }
 
             // BALANCE
-            if (input.equalsIgnoreCase("balance")) {
+            if (input.equalsIgnoreCase("show balance")) {
                 System.out.println("Balance: " + String.format(Locale.ROOT, "%.2f", invoiceManager.readBalance(loggedIn.id())));
                 continue;
             }
@@ -414,6 +412,54 @@ public class ElectricChargingPointNetwork {
                 System.out.println("Balance: " + String.format(Locale.ROOT, "%.2f", invoiceManager.readBalance(loggedIn.id())));
                 continue;
             }
+            if (input.toLowerCase(Locale.ROOT).startsWith("show price")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 3) {
+                    System.out.println("Usage: show price <chargingPointId>");
+                    continue;
+                }
+
+                String cpId = parts[2];
+
+                ChargingPoint cp = chargingPointManager.readAllChargingPoints().stream()
+                        .filter(p -> p.id().equalsIgnoreCase(cpId))
+                        .findFirst()
+                        .orElse(null);
+
+                if (cp == null) {
+                    System.out.println("Charging point not found: " + cpId);
+                    continue;
+                }
+
+                Location loc = locationManager.readLocation(cp.locationId());
+                if (loc == null) {
+                    System.out.println("Location not found: " + cp.locationId());
+                    continue;
+                }
+
+                if (loc.tariff() == null) {
+                    System.out.println("Tariff not defined for location " + loc.id());
+                    continue;
+                }
+
+                Tariff t = loc.tariff();
+                double priceKwh;
+                double priceMin;
+
+                if (cp.type() == ChargingType.AC) {
+                    priceKwh = t.pricePerKwhAC();
+                    priceMin = t.pricePerMinuteAC();
+                } else {
+                    priceKwh = t.pricePerKwhDC();
+                    priceMin = t.pricePerMinuteDC();
+                }
+
+                System.out.println(loc.id() + " - " + loc.name());
+                System.out.println("Charging point: " + cp.id() + " (" + cp.type() + ")");
+                System.out.println("Tariff: kWh=" + String.format(Locale.ROOT, "%.2f", priceKwh)
+                        + ", minute=" + String.format(Locale.ROOT, "%.2f", priceMin));
+                continue;
+            }
 
             System.out.println("Unknown customer command. Type 'help' to see commands.");
         }
@@ -425,17 +471,13 @@ public class ElectricChargingPointNetwork {
                 CUSTOMER COMMANDS:
                 help
                 back
-
                 create customer <firstName> <lastName>
-
                 login <firstName> <lastName>
                 logout
-
                 show locations
                 show charging points
-
                 topup <amount>
-                balance
+                show balance
                 show invoices
                 """);
     }

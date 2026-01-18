@@ -323,12 +323,15 @@ public class ElectricChargingPointNetwork {
         System.out.println("""
 
                 CUSTOMER COMMANDS:
-                show locations
-                show charging points
                 create customer <firstName> <lastName>
 
-                topup <customerId> <amount>          (US-3)
-                balance <customerId>                 (US-3)
+                show locations
+                show charging points
+                show invoices 
+                
+                topup <customerId> <amount>
+                balance <customerId>
+               
 
                 back
                 """);
@@ -415,6 +418,32 @@ public class ElectricChargingPointNetwork {
 
                 System.out.println("Balance for " + customerId + ": " +
                         String.format(Locale.ROOT, "%.2f", invoiceManager.readBalance(customerId)));
+                continue;
+            }
+            if (input.toLowerCase(Locale.ROOT).startsWith("show invoices")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 3) {
+                    System.out.println("Usage: show invoices <customerId>");
+                    continue;
+                }
+
+                String customerId = parts[2];
+                Customer c = customerManager.readCustomer(customerId);
+                if (c == null) {
+                    System.out.println("Customer not found: " + customerId);
+                    continue;
+                }
+
+                var invoices = invoiceManager.readInvoices(customerId);
+                if (invoices.isEmpty()) {
+                    System.out.println("(no invoices)");
+                } else {
+                    invoices.forEach(inv -> System.out.println(inv));
+                }
+
+                System.out.println("Current balance: " +
+                        String.format(Locale.ROOT, "%.2f", invoiceManager.readBalance(customerId)));
+
                 continue;
             }
 

@@ -42,7 +42,7 @@ public class ChargingSessionManager {
         ));
     }
 
-    // ✅ NEW: auto-generate id (S1, S2, ...) and start time = now
+    // ✅ auto-generate id (S1, S2, ...) and start time = now
     public ChargingSession createSessionAutoId(String customerId, String chargingPointId) {
         String id;
         do {
@@ -53,8 +53,62 @@ public class ChargingSessionManager {
         return sessions.get(id);
     }
 
-    // ✅ NEW: finish session using existing session data
-    public ChargingSession finishSession(String sessionId, double kWhCharged, double totalCost) {
+    // ✅ NEW: Calculation result record (keeps it simple, no new "big" classes)
+    public record Calculation(long durationMinutes, double kWhCharged, double totalCost) {}
+
+    /**
+     * ✅ NEW: Calculate live/finish values for a session based on:
+     * - session start time
+     * - endTime (e.g. new Date() for "now")
+     * - charging point type (AC/DC) to pick the right tariff values
+     *
+     * IMPORTANT: This matches your NEW meaning of tariff:
+     *   tariff.pricePerKwhAC/DC = "kW speed" (power)
+     *   tariff.pricePerMinuteAC/DC = "price per minute"
+     */
+    public Calculation calculateForSession(
+            ChargingSession session,
+            Date endTime,
+            ChargingType type,
+            Tariff tariff
+    ) {
+        if (session == null) throw new IllegalArgumentException("session must not be null");
+        if (endTime == null) throw new IllegalArgumentException("endTime must not be null");
+        if (type == null) throw new IllegalArgumentException("type must not be null");
+        if (tariff == null) throw new IllegalArgumentException("tariff must not be null");
+
+        if (session.startTime() == null) {
+            throw new IllegalArgumentException("session.startTime must not be null");
+        }
+
+        long minutes = (endTime.getTime() - session.startTime().getTime()) / 60000;
+        if (minutes < 0) minutes = 0;
+
+        // tariff fields interpreted as:
+        // powerKw = pricePerKwhAC/DC
+        // pricePerMin = pricePerMinuteAC/DC
+        double powerKw = (type == ChargingType.AC) ? tariff.pricePerKwhAC() : tariff.pricePerKwhDC();
+        double pricePerMin = (type == ChargingType.AC) ? tariff.pricePerMinuteAC() : tariff.pricePerMinuteDC();
+
+        double hours = minutes / 60.0;
+        double kWh = powerKw * hours;
+        double cost = minutes * pricePerMin;
+
+        return new Calculation(minutes, kWh, cost);
+    }
+
+    /**
+     * ✅ NEW: Finish session with auto-calculation, no CLI math.
+     *
+     * You pass the needed info from managers:
+     * - chargingPointType (from ChargingPoint)
+     * - tariff (from Location)
+     */
+    public ChargingSession finishSessionAutoCalculated(
+            String sessionId,
+            ChargingType chargingPointType,
+            Tariff tariff
+    ) {
         ChargingSession s = sessions.get(sessionId);
         if (s == null) {
             throw new IllegalArgumentException("Session not found: " + sessionId);
@@ -63,7 +117,10 @@ public class ChargingSessionManager {
             throw new IllegalArgumentException("Session is not ACTIVE: " + sessionId);
         }
 
-        endSession(sessionId, new Date(), kWhCharged, totalCost);
+        Date now = new Date();
+        Calculation calc = calculateForSession(s, now, chargingPointType, tariff);
+
+        endSession(sessionId, now, calc.kWhCharged(), calc.totalCost());
         return sessions.get(sessionId);
     }
 

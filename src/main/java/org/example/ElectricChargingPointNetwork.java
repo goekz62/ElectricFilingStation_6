@@ -34,19 +34,56 @@ public class ElectricChargingPointNetwork {
         locationManager.createLocation("L1", "Vienna Center", "Stephansplatz 1");
         locationManager.createLocation("L2", "Graz East", "Hauptstrasse 5");
         locationManager.createLocation("L3", "Graz North", "Hauptstrasse 7");
+        locationManager.createLocation("L4", "Linz Center", "Landstrasse 12");
+        locationManager.createLocation("L5", "Salzburg West", "Getreidegasse 8");
+        locationManager.createLocation("L6", "Innsbruck Mitte", "Maria-Theresien-Strasse 3");
+        locationManager.createLocation("L7", "Klagenfurt Süd", "Villacher Strasse 20");
+        locationManager.createLocation("L8", "St. Pölten Zentrum", "Rathausplatz 1");
+        locationManager.createLocation("L9", "Wels Nord", "Bahnhofstrasse 9");
+        locationManager.createLocation("L10", "Bregenz Hafen", "Seestrasse 4");
+        locationManager.createLocation("L11", "Villach Ost", "Italiener Strasse 15");
+        locationManager.createLocation("L12", "Leoben City", "Hauptplatz 6");
+        locationManager.createLocation("L13", "Krems Altstadt", "Obere Landstrasse 22");
 
-        locationManager.defineTariff("L1",0.9,1,0.09,0.01);
-        locationManager.defineTariff("L2",0.6,1.5,0.06,0.15);
-        locationManager.defineTariff("L3",0.8,1.2,0.08,0.12);
+
+        locationManager.defineTariff("L1", 20, 15, 0.09, 0.01);        locationManager.defineTariff("L2", 11, 50, 0.06, 0.25);   // City AC slow / DC fast
+        locationManager.defineTariff("L3", 22, 75, 0.08, 0.30);   // Shopping center
+        locationManager.defineTariff("L4", 11, 100, 0.07, 0.35);  // Highway charger
+        locationManager.defineTariff("L5", 22, 150, 0.09, 0.45);  // Fast DC hub
+        locationManager.defineTariff("L6", 7.4, 50, 0.05, 0.22);  // Residential area
+        locationManager.defineTariff("L7", 11, 75, 0.06, 0.28);   // Office parking
+        locationManager.defineTariff("L8", 22, 120, 0.08, 0.40);  // Premium location
+        locationManager.defineTariff("L9", 11, 60, 0.06, 0.26);   // Regional charger
+        locationManager.defineTariff("L10", 22, 180, 0.10, 0.55); // Ultra-fast DC
+
 
         chargingPointManager.createChargingPoint("CP1", "L1", ChargingType.AC, ChargingPointStatus.AVAILABLE);
         chargingPointManager.createChargingPoint("CP2", "L1", ChargingType.DC, ChargingPointStatus.OCCUPIED);
         chargingPointManager.createChargingPoint("CP3", "L2", ChargingType.DC, ChargingPointStatus.OUT_OF_ORDER);
+        chargingPointManager.createChargingPoint("CP4", "L2", ChargingType.AC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP5", "L3", ChargingType.DC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP6", "L4", ChargingType.AC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP7", "L5", ChargingType.DC, ChargingPointStatus.OCCUPIED);
+        chargingPointManager.createChargingPoint("CP8", "L6", ChargingType.AC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP9", "L7", ChargingType.DC, ChargingPointStatus.OUT_OF_ORDER);
+        chargingPointManager.createChargingPoint("CP10", "L8", ChargingType.AC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP11", "L9", ChargingType.DC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP12", "L10", ChargingType.AC, ChargingPointStatus.OCCUPIED);
+        chargingPointManager.createChargingPoint("CP13", "L11", ChargingType.DC, ChargingPointStatus.AVAILABLE);
 
         // create customers (auto id: C1, C2, C3)
         Customer c1 = customerManager.createCustomer("Judith", "Muellner");
         customerManager.createCustomer("Katharina", "Weinberger");
         customerManager.createCustomer("Franz", "Steininger");
+        customerManager.createCustomer("Nisa", "Yesillik");
+        customerManager.createCustomer("Lukas", "Huber");
+        customerManager.createCustomer("Anna", "Mayer");
+        customerManager.createCustomer("Paul", "Gruber");
+        customerManager.createCustomer("Sophie", "Wagner");
+        customerManager.createCustomer("David", "Fischer");
+        customerManager.createCustomer("Laura", "Bauer");
+        customerManager.createCustomer("Max", "Schneider");
+
 
         // demo session
         chargingSessionManager.createFinishedSession(
@@ -313,6 +350,7 @@ public class ElectricChargingPointNetwork {
                 show balance
                 show invoices
                 start charging session <chargingPointId>
+                stop charging session <sessionId>
                 show session
                 back
                 """);
@@ -444,8 +482,51 @@ public class ElectricChargingPointNetwork {
                 }
 
                 var invoices = invoiceManager.readInvoices(loggedInCustomer.id());
-                if (invoices.isEmpty()) System.out.println("(no invoices)");
-                else invoices.forEach(System.out::println);
+
+                if (invoices.isEmpty()) {
+                    System.out.println("(no invoices)");
+                } else {
+
+                    // sort by session start time
+                    invoices.sort(java.util.Comparator.comparing(i -> i.session().startTime()));
+
+                    int itemNo = 1;
+                    for (Invoice inv : invoices) {
+
+                        ChargingSession s = inv.session();
+                        ChargingPoint cp = chargingPointManager.readChargingPoint(s.chargingPointId());
+
+                        String locationName = "UNKNOWN";
+                        String mode = "UNKNOWN";
+
+                        if (cp != null) {
+                            mode = cp.type().name(); // AC / DC
+                            Location loc = locationManager.readLocation(cp.locationId());
+                            if (loc != null) {
+                                locationName = loc.name();
+                            }
+                        }
+
+                        long durationMin = 0;
+                        if (s.startTime() != null && s.endTime() != null) {
+                            durationMin = (s.endTime().getTime() - s.startTime().getTime()) / 60000;
+                        }
+
+                        System.out.printf(
+                                Locale.ROOT,
+                                "%d) invoice=%s | location=%s | cp=%s | mode=%s | duration=%d min | energy=%.2f kWh | price=%.2f | status=%s%n",
+                                itemNo++,
+                                inv.id(),
+                                locationName,
+                                s.chargingPointId(),
+                                mode,
+                                durationMin,
+                                s.kWhCharged(),
+                                s.totalCost(),
+                                inv.status()
+                        );
+                    }
+                }
 
                 System.out.println("Current balance: " + money(invoiceManager.readBalance(loggedInCustomer.id())));
                 continue;
@@ -564,48 +645,46 @@ public class ElectricChargingPointNetwork {
                 }
 
                 ChargingPoint cp = chargingPointManager.readChargingPoint(s.chargingPointId());
+                if (cp == null) {
+                    System.out.println("Charging point not found: " + s.chargingPointId());
+                    continue;
+                }
+
                 Location loc = locationManager.readLocation(cp.locationId());
                 if (loc == null || loc.tariff() == null) {
                     System.out.println("Tariff missing. Cannot calculate costs.");
                     continue;
                 }
 
-                Date now = new Date();
-                long minutes = (now.getTime() - s.startTime().getTime()) / 60000;
-
-                double kw = (cp.type() == ChargingType.AC) ? 11.0 : 50.0; // FIXED POWER
-                double hours = minutes / 60.0;
-                double kWh = kw * hours;
-
+                // ✅ calculate inside ChargingSessionManager (no CLI math)
                 Tariff t = loc.tariff();
-                double cost = kWh * (cp.type() == ChargingType.AC ? t.pricePerKwhAC() : t.pricePerKwhDC())
-                        + minutes * (cp.type() == ChargingType.AC ? t.pricePerMinuteAC() : t.pricePerMinuteDC());
+                ChargingSessionManager.Calculation calc =
+                        chargingSessionManager.calculateForSession(s, new Date(), cp.type(), t);
 
                 // prepaid check: balance must cover cost
                 double balance = invoiceManager.readBalance(loggedInCustomer.id());
-                if (balance < cost) {
+                if (balance < calc.totalCost()) {
                     System.out.println("Not enough balance to stop & bill. Please top up first.");
-                    System.out.println("Needed: " + String.format(Locale.ROOT, "%.2f", cost) +
+                    System.out.println("Needed: " + String.format(Locale.ROOT, "%.2f", calc.totalCost()) +
                             " | Balance: " + String.format(Locale.ROOT, "%.2f", balance));
                     continue;
                 }
 
-                ChargingSession finished = chargingSessionManager.finishSession(sessionId, kWh, cost);
+                // ✅ finish using auto-calculation (stores endTime/kWh/cost in session)
+                Date now = new Date();
+                ChargingSession finished =
+                        chargingSessionManager.finishSessionAutoCalculated(sessionId, cp.type(), t);
+
                 System.out.println("Session finished: " + finished);
-                System.out.println("Charged kWh=" + String.format(Locale.ROOT, "%.2f", kWh) +
-                        " totalCost=" + String.format(Locale.ROOT, "%.2f", cost));
+                System.out.println("Charged kWh=" + String.format(Locale.ROOT, "%.2f", finished.kWhCharged()) +
+                        " totalCost=" + String.format(Locale.ROOT, "%.2f", finished.totalCost()));
 
                 // optional: create an invoice automatically (simple MVP)
-                String invoiceId = "I" + System.currentTimeMillis();
-                invoiceManager.addInvoice(invoiceId, loggedInCustomer.id(), finished, now, InvoiceStatus.PAID);
+                String invoiceId = invoiceManager.addInvoiceAutoId(loggedInCustomer.id(), finished, now, InvoiceStatus.PAID);
                 System.out.println("Invoice created: " + invoiceId);
 
                 continue;
             }
-
-
-
-
 
             System.out.println("Unknown customer command.");
         }

@@ -12,6 +12,7 @@ Feature: EPIC 2 - Manage Pricing
   # =========================
   # US-6 Define prices
   # =========================
+
   Scenario: Define AC and DC prices for a location
     When the operator defines a tariff for location "L1" with:
       | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |

@@ -30,15 +30,26 @@ Feature: EPIC 3 - Network Monitoring
       | L2 | Graz East     | Hauptstrasse 5  |
     And the operator defines a tariff for location "L1" with:
       | kWhAC | kWhDC | minAC | minDC |
-      | 20    | 15    | 0.09  | 0.01  |
+      | 0.20  | 0.15  | 0.09  | 0.01  |
     And the operator defines a tariff for location "L2" with:
       | kWhAC | kWhDC | minAC | minDC |
-      | 25    | 18    | 0.10  | 0.02  |
+      | 0.25  | 0.18  | 0.10  | 0.02  |
     When the operator requests current prices for all locations
     Then the system returns current prices for 2 locations
     And location "L1" current price is
       | kWhAC | kWhDC | minAC | minDC |
-      | 20    | 15    | 0.09  | 0.01  |
+      | 0.20  | 0.15  | 0.09  | 0.01  |
     And location "L2" current price is
       | kWhAC | kWhDC | minAC | minDC |
-      | 25    | 18    | 0.10  | 0.02  |
+      | 0.25  | 0.18  | 0.10  | 0.02  |
+
+  # ------------------------------------------------------------
+  # Edge case - no available charging points
+  # ------------------------------------------------------------
+  Scenario: View available charging points when none are available
+    Given the network has charging points
+      | id  | locationId | type | status       |
+      | CP1 | L1         | AC   | OCCUPIED     |
+      | CP2 | L1         | DC   | OUT_OF_ORDER |
+    When the operator requests all available charging points
+    Then the system returns 0 available charging points

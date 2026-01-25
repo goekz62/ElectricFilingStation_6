@@ -9,7 +9,7 @@ public record Tariff(
 ) {
     @Override
     public String toString() {
-        return "Tariff{id='%s', kWhAC=%s, kWhDC=%s, minAC=%s, minDC=%s}"
+        return "Tariff{id='%s', pricePerKwhAC=%s, pricePerKwhDC=%s, parkingPerMinAC=%s, parkingPerMinDC=%s}"
                 .formatted(tariffId, pricePerKwhAC, pricePerKwhDC, pricePerMinuteAC, pricePerMinuteDC);
     }
 }

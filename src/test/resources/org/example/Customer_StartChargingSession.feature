@@ -11,7 +11,7 @@ Feature: Customer EPIC 4 - Start Charging Session
       | CP1 | L1         | AC   | AVAILABLE |
     And location "L1" has tariff
       | kWhAC | kWhDC | minAC | minDC |
-      | 20    | 15    | 0.09  | 0.01  |
+      | 0.20  | 0.15  | 0.09  | 0.01  |
     And there are customers
       | firstName | lastName |
       | Nisa      | Yesillik |
@@ -35,5 +35,13 @@ Feature: Customer EPIC 4 - Start Charging Session
     When 30 minutes pass for that session
     And the customer requests charging session information
     Then the session shows duration 30 minutes
-    And the session shows charged energy 10.00 kWh
-    And the session shows total cost 2.70
+    And the session shows charged energy 5.50 kWh
+    And the session shows total cost 3.80
+
+  # ---------------------------
+  # Edge case: insufficient balance
+  # ---------------------------
+  Scenario: Customer cannot start a charging session without balance
+    Given the customer has no balance
+    When the customer attempts to start charging session on charging point "CP1"
+    Then the system shows an error containing "balance"

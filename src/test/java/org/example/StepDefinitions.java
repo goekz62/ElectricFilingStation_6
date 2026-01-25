@@ -425,25 +425,44 @@ public class StepDefinitions {
             currentCustomerId = identifiedCustomer.id();
         }
 
+        Map<String, List<Map<String, String>>> rowsByInvoice = new java.util.LinkedHashMap<>();
         for (Map<String, String> row : table.asMaps(String.class, String.class)) {
+            rowsByInvoice.computeIfAbsent(row.get("invoiceId"), key -> new java.util.ArrayList<>()).add(row);
+        }
 
-            ChargingSession session = new ChargingSession(
-                    row.get("sessionId"),
-                    currentCustomerId,
-                    row.get("chargingPointId"),
-                    parseIsoDateTime(row.get("startTime")),
-                    parseIsoDateTime(row.get("endTime")),
-                    Double.parseDouble(row.get("kWhCharged")),
-                    Double.parseDouble(row.get("totalCost")),
-                    ChargingSessionStatus.FINISHED
-            );
+        for (Map.Entry<String, List<Map<String, String>>> entry : rowsByInvoice.entrySet()) {
+            String invoiceId = entry.getKey();
+            List<ChargingSession> sessions = new java.util.ArrayList<>();
+            Date createdAt = null;
+            InvoiceStatus status = null;
+
+            for (Map<String, String> row : entry.getValue()) {
+                ChargingSession session = new ChargingSession(
+                        row.get("sessionId"),
+                        currentCustomerId,
+                        row.get("chargingPointId"),
+                        parseIsoDateTime(row.get("startTime")),
+                        parseIsoDateTime(row.get("endTime")),
+                        Double.parseDouble(row.get("kWhCharged")),
+                        Double.parseDouble(row.get("totalCost")),
+                        ChargingSessionStatus.FINISHED
+                );
+                sessions.add(session);
+
+                if (createdAt == null) {
+                    createdAt = parseIsoDateTime(row.get("endTime"));
+                }
+                if (status == null) {
+                    status = InvoiceStatus.valueOf(row.get("status"));
+                }
+            }
 
             invoiceManager.addInvoice(
-                    row.get("invoiceId"),
+                    invoiceId,
                     currentCustomerId,
-                    session,
-                    parseIsoDateTime(row.get("endTime")),
-                    InvoiceStatus.valueOf(row.get("status"))
+                    sessions,
+                    createdAt,
+                    status
             );
         }
     }
@@ -475,9 +494,26 @@ public class StepDefinitions {
                 .orElse(null);
 
         assertNotNull(invoice, "Invoice not found: " + invoiceId);
-        assertEquals(sessionId, invoice.session().id());
-        assertEquals(chargingPointId, invoice.session().chargingPointId());
-        assertEquals(totalCost, invoice.session().totalCost(), 0.0001);
+        ChargingSession session = invoice.sessions().stream()
+                .filter(s -> s.id().equals(sessionId))
+                .findFirst()
+                .orElse(null);
+        assertNotNull(session, "Session not found in invoice: " + sessionId);
+        assertEquals(chargingPointId, session.chargingPointId());
+        assertEquals(totalCost, session.totalCost(), 0.0001);
+    }
+
+    @Then("invoice {string} has {int} sessions")
+    public void invoice_has_sessions(String invoiceId, int expectedSessions) {
+        assertNotNull(lastInvoices);
+
+        Invoice invoice = lastInvoices.stream()
+                .filter(i -> i.id().equals(invoiceId))
+                .findFirst()
+                .orElse(null);
+
+        assertNotNull(invoice, "Invoice not found: " + invoiceId);
+        assertEquals(expectedSessions, invoice.sessions().size());
     }
 
     // =========================================================
@@ -493,7 +529,13 @@ public class StepDefinitions {
     @When("a customer registers with first name {string} and last name {string}")
     public void a_customer_registers_with_first_name_and_last_name(String firstName, String lastName) {
         assertNotNull(customerManager, "customerManager must be initialized");
-        createdCustomer = customerManager.createCustomer(firstName, lastName);
+        lastError = null;
+        createdCustomer = null;
+        try {
+            createdCustomer = customerManager.createCustomer(firstName, lastName);
+        } catch (Exception e) {
+            lastError = e;
+        }
     }
 
     @Then("the system creates the customer")
@@ -581,6 +623,20 @@ public class StepDefinitions {
         invoiceManager.addTopUp(topUpId, identifiedCustomer.id(), amount, new Date());
     }
 
+    @When("the customer attempts to top up amount {double}")
+    public void the_customer_attempts_to_top_up_amount(double amount) {
+        assertNotNull(invoiceManager, "invoiceManager must be initialized");
+        assertNotNull(identifiedCustomer, "Customer must be identified first");
+
+        lastError = null;
+        try {
+            String topUpId = "T_ERR_" + System.currentTimeMillis();
+            invoiceManager.addTopUp(topUpId, identifiedCustomer.id(), amount, new Date());
+        } catch (Exception e) {
+            lastError = e;
+        }
+    }
+
     @Then("the customer balance is {double}")
     public void the_customer_balance_is(double expected) {
         assertNotNull(invoiceManager, "invoiceManager must be initialized");
@@ -611,8 +667,8 @@ public class StepDefinitions {
 
     private List<ChargingPoint> lastCustomerChargingPoints;
     private ChargingPoint lastCustomerSelectedChargingPoint;
-    private double lastCustomerKwhPerHour;
-    private double lastCustomerPricePerMinute;
+    private double lastCustomerPricePerKwh;
+    private double lastCustomerParkingPerMinute;
 
     // --- helper step: define tariff directly for a location (customer scenarios need tariffs) ---
     @Given("location {string} has tariff")
@@ -688,21 +744,21 @@ public class StepDefinitions {
 
         Tariff t = loc.tariff();
 
-        // NEW meaning: kWhAC/kWhDC = charging speed (kWh per hour), minAC/minDC = price per minute
+        // NEW meaning: kWhAC/kWhDC = price per kWh, minAC/minDC = parking price per minute
         if (lastCustomerSelectedChargingPoint.type() == ChargingType.AC) {
-            lastCustomerKwhPerHour = t.pricePerKwhAC();        // kWh per hour
-            lastCustomerPricePerMinute = t.pricePerMinuteAC(); // €/min
+            lastCustomerPricePerKwh = t.pricePerKwhAC();
+            lastCustomerParkingPerMinute = t.pricePerMinuteAC();
         } else {
-            lastCustomerKwhPerHour = t.pricePerKwhDC();
-            lastCustomerPricePerMinute = t.pricePerMinuteDC();
+            lastCustomerPricePerKwh = t.pricePerKwhDC();
+            lastCustomerParkingPerMinute = t.pricePerMinuteDC();
         }
     }
 
-    @Then("the system shows charging speed kWhPerHour {double} and pricePerMinute {double}")
-    public void the_system_shows_charging_speed_and_price_per_minute(double expectedKwhPerHour, double expectedPricePerMinute) {
+    @Then("the system shows price per kWh {double} and parking per minute {double}")
+    public void the_system_shows_price_per_kwh_and_parking_per_minute(double expectedPricePerKwh, double expectedParkingPerMinute) {
         assertNotNull(lastCustomerSelectedChargingPoint, "No charging point selected");
-        assertEquals(expectedKwhPerHour, lastCustomerKwhPerHour, 0.00001);
-        assertEquals(expectedPricePerMinute, lastCustomerPricePerMinute, 0.00001);
+        assertEquals(expectedPricePerKwh, lastCustomerPricePerKwh, 0.00001);
+        assertEquals(expectedParkingPerMinute, lastCustomerParkingPerMinute, 0.00001);
     }
 
     // =========================================================
@@ -732,6 +788,12 @@ public class StepDefinitions {
         invoiceManager.addTopUp("T_BAL_" + System.currentTimeMillis(), identifiedCustomer.id(), amount, new java.util.Date());
     }
 
+    @Given("the customer has no balance")
+    public void the_customer_has_no_balance() {
+        assertNotNull(identifiedCustomer, "identifiedCustomer must be set first");
+        invoiceManager = new InvoiceManager();
+    }
+
     // -------------------------
 // US-9 start session
 // -------------------------
@@ -757,6 +819,16 @@ public class StepDefinitions {
         assertNotNull(lastStartedSession);
 
         lastSessionId = lastStartedSession.id();
+    }
+
+    @When("the customer attempts to start charging session on charging point {string}")
+    public void the_customer_attempts_to_start_charging_session_on_charging_point(String chargingPointId) {
+        lastError = null;
+        try {
+            the_customer_starts_charging_session_on_charging_point(chargingPointId);
+        } catch (AssertionError | RuntimeException e) {
+            lastError = e;
+        }
     }
 
     @Then("a new charging session is created and is ACTIVE")
@@ -807,15 +879,13 @@ public class StepDefinitions {
 
         Tariff t = loc.tariff();
 
-        // new tariff meaning:
-        // kWhAC/kWhDC = kWh per hour (speed)
-        // minAC/minDC = price per minute
-        double kWhPerHour = (cp.type() == ChargingType.AC) ? t.pricePerKwhAC() : t.pricePerKwhDC();
-        double pricePerMinute = (cp.type() == ChargingType.AC) ? t.pricePerMinuteAC() : t.pricePerMinuteDC();
+        double pricePerKwh = (cp.type() == ChargingType.AC) ? t.pricePerKwhAC() : t.pricePerKwhDC();
+        double parkingPerMinute = (cp.type() == ChargingType.AC) ? t.pricePerMinuteAC() : t.pricePerMinuteDC();
 
+        double powerKw = (cp.type() == ChargingType.AC) ? 11.0 : 50.0;
         double hours = minutes / 60.0;
-        double energy = kWhPerHour * hours;
-        double cost = minutes * pricePerMinute;
+        double energy = powerKw * hours;
+        double cost = energy * pricePerKwh + minutes * parkingPerMinute;
 
         // "simulate" end time after X minutes (still deterministic)
         java.util.Date fakeEnd = new java.util.Date(s.startTime().getTime() + minutes * 60_000L);

@@ -62,9 +62,9 @@ public class ChargingSessionManager {
      * - endTime (e.g. new Date() for "now")
      * - charging point type (AC/DC) to pick the right tariff values
      *
-     * IMPORTANT: This matches your NEW meaning of tariff:
-     *   tariff.pricePerKwhAC/DC = "kW speed" (power)
-     *   tariff.pricePerMinuteAC/DC = "price per minute"
+     * IMPORTANT: Tariff meaning:
+     *   tariff.pricePerKwhAC/DC = price per kWh
+     *   tariff.pricePerMinuteAC/DC = parking price per minute
      */
     public Calculation calculateForSession(
             ChargingSession session,
@@ -84,15 +84,14 @@ public class ChargingSessionManager {
         long minutes = (endTime.getTime() - session.startTime().getTime()) / 60000;
         if (minutes < 0) minutes = 0;
 
-        // tariff fields interpreted as:
-        // powerKw = pricePerKwhAC/DC
-        // pricePerMin = pricePerMinuteAC/DC
-        double powerKw = (type == ChargingType.AC) ? tariff.pricePerKwhAC() : tariff.pricePerKwhDC();
+        double pricePerKwh = (type == ChargingType.AC) ? tariff.pricePerKwhAC() : tariff.pricePerKwhDC();
         double pricePerMin = (type == ChargingType.AC) ? tariff.pricePerMinuteAC() : tariff.pricePerMinuteDC();
+
+        double powerKw = (type == ChargingType.AC) ? 11.0 : 50.0;
 
         double hours = minutes / 60.0;
         double kWh = powerKw * hours;
-        double cost = minutes * pricePerMin;
+        double cost = (kWh * pricePerKwh) + (minutes * pricePerMin);
 
         return new Calculation(minutes, kWh, cost);
     }

@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import java.util.Scanner;
 
@@ -46,15 +47,16 @@ public class ElectricChargingPointNetwork {
         locationManager.createLocation("L13", "Krems Altstadt", "Obere Landstrasse 22");
 
 
-        locationManager.defineTariff("L1", 20, 15, 0.09, 0.01);        locationManager.defineTariff("L2", 11, 50, 0.06, 0.25);   // City AC slow / DC fast
-        locationManager.defineTariff("L3", 22, 75, 0.08, 0.30);   // Shopping center
-        locationManager.defineTariff("L4", 11, 100, 0.07, 0.35);  // Highway charger
-        locationManager.defineTariff("L5", 22, 150, 0.09, 0.45);  // Fast DC hub
-        locationManager.defineTariff("L6", 7.4, 50, 0.05, 0.22);  // Residential area
-        locationManager.defineTariff("L7", 11, 75, 0.06, 0.28);   // Office parking
-        locationManager.defineTariff("L8", 22, 120, 0.08, 0.40);  // Premium location
-        locationManager.defineTariff("L9", 11, 60, 0.06, 0.26);   // Regional charger
-        locationManager.defineTariff("L10", 22, 180, 0.10, 0.55); // Ultra-fast DC
+        locationManager.defineTariff("L1", 0.20, 0.15, 0.09, 0.01);
+        locationManager.defineTariff("L2", 0.11, 0.50, 0.06, 0.25);
+        locationManager.defineTariff("L3", 0.22, 0.75, 0.08, 0.30);
+        locationManager.defineTariff("L4", 0.11, 1.00, 0.07, 0.35);
+        locationManager.defineTariff("L5", 0.22, 1.50, 0.09, 0.45);
+        locationManager.defineTariff("L6", 0.07, 0.50, 0.05, 0.22);
+        locationManager.defineTariff("L7", 0.11, 0.75, 0.06, 0.28);
+        locationManager.defineTariff("L8", 0.22, 1.20, 0.08, 0.40);
+        locationManager.defineTariff("L9", 0.11, 0.60, 0.06, 0.26);
+        locationManager.defineTariff("L10", 0.22, 1.80, 0.10, 0.55);
 
 
         chargingPointManager.createChargingPoint("CP1", "L1", ChargingType.AC, ChargingPointStatus.AVAILABLE);
@@ -102,7 +104,7 @@ public class ElectricChargingPointNetwork {
         invoiceManager.addTopUp("T1", c1.id(), 20.00, parseIsoDateTime("2026-01-17T09:00"));
         invoiceManager.addTopUp("T2", c1.id(), 15.00, parseIsoDateTime("2026-01-17T09:30"));
         ChargingSession s1 = chargingSessionManager.readSession("S1");
-        invoiceManager.addInvoice("I1", c1.id(), s1, parseIsoDateTime("2026-01-17T10:30"), InvoiceStatus.PAID);
+        invoiceManager.addInvoice("I1", c1.id(), List.of(s1), parseIsoDateTime("2026-01-17T10:30"), InvoiceStatus.PAID);
 
         Scanner scanner = new Scanner(System.in);
 
@@ -157,8 +159,8 @@ public class ElectricChargingPointNetwork {
                 
                 create location <id> <name_with_underscores> <address_with_underscores>
                 create charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
-                define tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>
-                update tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>
+                define tariff <locationId> <kWhAC> <kWhDC> <parkingMinAC> <parkingMinDC>
+                update tariff <locationId> <kWhAC> <kWhDC> <parkingMinAC> <parkingMinDC>
                 back
                 """);
 
@@ -235,8 +237,16 @@ public class ElectricChargingPointNetwork {
 
                 System.out.println("\nInvoices:");
                 var invoices = invoiceManager.readInvoices(customerId);
-                if (invoices.isEmpty()) System.out.println("  (none)");
-                else invoices.forEach(inv -> System.out.println("  " + inv));
+                if (invoices.isEmpty()) {
+                    System.out.println("  (none)");
+                } else {
+                    for (Invoice inv : invoices) {
+                        System.out.println("  " + inv);
+                        for (ChargingSession session : inv.sessions()) {
+                            System.out.println("    " + session);
+                        }
+                    }
+                }
 
                 System.out.println("\nBalance: " + money(invoiceManager.readBalance(customerId)));
                 continue;
@@ -486,46 +496,84 @@ public class ElectricChargingPointNetwork {
                 if (invoices.isEmpty()) {
                     System.out.println("(no invoices)");
                 } else {
-
-                    // sort by session start time
-                    invoices.sort(java.util.Comparator.comparing(i -> i.session().startTime()));
-
+                    invoices.sort(java.util.Comparator.comparing(inv -> inv.sessions().stream()
+                            .map(ChargingSession::startTime)
+                            .filter(java.util.Objects::nonNull)
+                            .min(Date::compareTo)
+                            .orElse(new Date(0))));
                     int itemNo = 1;
                     for (Invoice inv : invoices) {
-
-                        ChargingSession s = inv.session();
-                        ChargingPoint cp = chargingPointManager.readChargingPoint(s.chargingPointId());
-
-                        String locationName = "UNKNOWN";
-                        String mode = "UNKNOWN";
-
-                        if (cp != null) {
-                            mode = cp.type().name(); // AC / DC
-                            Location loc = locationManager.readLocation(cp.locationId());
-                            if (loc != null) {
-                                locationName = loc.name();
-                            }
-                        }
-
-                        long durationMin = 0;
-                        if (s.startTime() != null && s.endTime() != null) {
-                            durationMin = (s.endTime().getTime() - s.startTime().getTime()) / 60000;
-                        }
+                        List<ChargingSession> sessions = new java.util.ArrayList<>(inv.sessions());
+                        sessions.sort(java.util.Comparator.comparing(ChargingSession::startTime));
 
                         System.out.printf(
                                 Locale.ROOT,
-                                "%d) invoice=%s | location=%s | cp=%s | mode=%s | duration=%d min | energy=%.2f kWh | price=%.2f | status=%s%n",
+                                "%d) invoice=%s | total=%.2f | status=%s%n",
                                 itemNo++,
                                 inv.id(),
-                                locationName,
-                                s.chargingPointId(),
-                                mode,
-                                durationMin,
-                                s.kWhCharged(),
-                                s.totalCost(),
+                                inv.totalCost(),
                                 inv.status()
                         );
+
+                        int lineNo = 1;
+                        for (ChargingSession s : sessions) {
+                            ChargingPoint cp = chargingPointManager.readChargingPoint(s.chargingPointId());
+
+                            String locationName = "UNKNOWN";
+                            String mode = "UNKNOWN";
+                            Tariff tariff = null;
+
+                            if (cp != null) {
+                                mode = cp.type().name();
+                                Location loc = locationManager.readLocation(cp.locationId());
+                                if (loc != null) {
+                                    locationName = loc.name();
+                                    tariff = loc.tariff();
+                                }
+                            }
+
+                            long durationMin = 0;
+                            if (s.startTime() != null && s.endTime() != null) {
+                                durationMin = (s.endTime().getTime() - s.startTime().getTime()) / 60000;
+                            }
+
+                            double pricePerKwh = 0.0;
+                            double parkingPerMin = 0.0;
+                            if (tariff != null && cp != null) {
+                                pricePerKwh = (cp.type() == ChargingType.AC) ? tariff.pricePerKwhAC() : tariff.pricePerKwhDC();
+                                parkingPerMin = (cp.type() == ChargingType.AC) ? tariff.pricePerMinuteAC() : tariff.pricePerMinuteDC();
+                            }
+
+                            double energyCost = s.kWhCharged() * pricePerKwh;
+                            double parkingCost = durationMin * parkingPerMin;
+
+                            System.out.printf(
+                                    Locale.ROOT,
+                                    "  %d.%d) %s | cp=%s | mode=%s | duration=%d min | energy=%.2f kWh @ %.2f | energyCost=%.2f | parkingCost=%.2f | total=%.2f%n",
+                                    itemNo - 1,
+                                    lineNo++,
+                                    locationName,
+                                    s.chargingPointId(),
+                                    mode,
+                                    durationMin,
+                                    s.kWhCharged(),
+                                    pricePerKwh,
+                                    energyCost,
+                                    parkingCost,
+                                    s.totalCost()
+                            );
+                        }
                     }
+                }
+
+                System.out.println("Top-ups (sorted by time):");
+                var topUps = invoiceManager.readTopUps(loggedInCustomer.id());
+                if (topUps.isEmpty()) {
+                    System.out.println("(no top-ups)");
+                } else {
+                    topUps.stream()
+                            .sorted(java.util.Comparator.comparing(TopUp::dateTime))
+                            .forEach(t -> System.out.println("  " + t));
                 }
 
                 System.out.println("Current balance: " + money(invoiceManager.readBalance(loggedInCustomer.id())));
@@ -594,22 +642,24 @@ public class ElectricChargingPointNetwork {
                 // If ACTIVE -> show live values (duration + estimated kWh + estimated cost)
                 if (s.status() == ChargingSessionStatus.ACTIVE) {
                     ChargingPoint cp = chargingPointManager.readChargingPoint(s.chargingPointId());
+                    if (cp == null) {
+                        System.out.println("Live: charging point missing.");
+                        continue;
+                    }
+
                     Location loc = locationManager.readLocation(cp.locationId());
+                    if (loc == null || loc.tariff() == null) {
+                        System.out.println("Live: tariff missing.");
+                        continue;
+                    }
 
-                    long minutes = (new Date().getTime() - s.startTime().getTime()) / 60000;
-
-                    double kw = (cp.type() == ChargingType.AC) ? 11.0 : 50.0; // FIXED POWER
-                    double hours = minutes / 60.0;
-                    double kWh = kw * hours;
-
-                    Tariff t = loc.tariff();
-                    double cost = kWh * (cp.type() == ChargingType.AC ? t.pricePerKwhAC() : t.pricePerKwhDC())
-                            + minutes * (cp.type() == ChargingType.AC ? t.pricePerMinuteAC() : t.pricePerMinuteDC());
+                    ChargingSessionManager.Calculation calc =
+                            chargingSessionManager.calculateForSession(s, new Date(), cp.type(), loc.tariff());
 
                     System.out.println("Live:");
-                    System.out.println("  durationMin=" + minutes);
-                    System.out.println("  estKWh=" + String.format(Locale.ROOT, "%.2f", kWh));
-                    System.out.println("  estCost=" + String.format(Locale.ROOT, "%.2f", cost));
+                    System.out.println("  durationMin=" + calc.durationMinutes());
+                    System.out.println("  estKWh=" + String.format(Locale.ROOT, "%.2f", calc.kWhCharged()));
+                    System.out.println("  estCost=" + String.format(Locale.ROOT, "%.2f", calc.totalCost()));
                 }
                 continue;
             }

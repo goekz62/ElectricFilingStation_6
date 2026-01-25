@@ -9,6 +9,12 @@ public class CustomerManager {
 
     // SYSTEM generates the ID
     public Customer createCustomer(String firstName, String lastName) {
+        if (firstName == null || firstName.isBlank()) {
+            throw new IllegalArgumentException("first name must not be empty");
+        }
+        if (lastName == null || lastName.isBlank()) {
+            throw new IllegalArgumentException("last name must not be empty");
+        }
         String id = "C" + nextId++;
         Customer customer = new Customer(id, firstName, lastName);
         customers.put(id, customer);

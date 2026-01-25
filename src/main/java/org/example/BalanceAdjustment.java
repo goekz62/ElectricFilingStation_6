@@ -8,9 +8,7 @@ public record BalanceAdjustment(
         double amount,
         Date dateTime,
         String reason
-)
-
-{
+) {
     @Override
     public String toString() {
         return "BalanceAdjustment{id='%s', customerId='%s', amount=%.2f, dateTime=%s, reason='%s'}"

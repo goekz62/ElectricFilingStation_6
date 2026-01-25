@@ -12,10 +12,21 @@ import java.util.Scanner;
 public class ElectricChargingPointNetwork {
 
     private static final DateTimeFormatter ISO_DT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
+    private static final DateTimeFormatter DISPLAY_DT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private static Date parseIsoDateTime(String text) {
         LocalDateTime ldt = LocalDateTime.parse(text, ISO_DT);
         return Date.from(ldt.atZone(ZoneId.systemDefault()).toInstant());
+    }
+
+    private static String formatDisplayDateTime(Date date) {
+        if (date == null) {
+            return "N/A";
+        }
+        return date.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDateTime()
+                .format(DISPLAY_DT);
     }
 
     private static String money(double v) {
@@ -44,6 +55,193 @@ public class ElectricChargingPointNetwork {
         }
     }
 
+    private static void printOperatorMenu() {
+        System.out.println("""
+                
+                OPERATOR MENU (type 'help' to see full command syntax)
+                1) View data:    locations | charging points | customers | prices | network status
+                2) Sessions:     show sessions | show session <id>
+                3) Billing:      show billing <customerId>
+                4) Manage:       create/update/delete location | charging point | status
+                5) Pricing:      define/update tariff
+                6) Filters:      filter charging points
+                7) Balance:      correct balance <customerId> <amount> <reason>
+                back
+                """);
+    }
+
+    private static void printCustomerMenu() {
+        System.out.println("""
+                
+                CUSTOMER MENU (type 'help' to see full command syntax)
+                1) Account:      create customer | login | logout | delete account
+                2) View data:    locations | charging points | prices <locationId> | network status
+                3) Filters:      filter charging points
+                4) Balance:      topup | show balance | show invoices
+                5) Sessions:     start charging session <chargingPointId> | stop charging session <sessionId> | show session <sessionId>
+                back
+                """);
+    }
+
+    private static void printOperatorHelp() {
+        System.out.println("""
+                
+                OPERATOR COMMANDS (full syntax)
+                show locations
+                show charging points
+                show customers
+                show prices
+                show network status
+                
+                show sessions
+                show session <sessionId>
+                
+                show billing <customerId>   (US-12)
+                
+                create location <id> <name_with_underscores> <address_with_underscores>
+                update location <id> <name_with_underscores> <address_with_underscores>
+                delete location <id>
+                
+                create charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
+                update charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
+                delete charging point <id>
+                update charging point status <id> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
+                
+                define tariff <locationId> <kWhAC> <kWhDC> <parkingMinAC> <parkingMinDC> <timePeriod> <startHH:mm> <endHH:mm>
+                update tariff <locationId> <kWhAC> <kWhDC> <parkingMinAC> <parkingMinDC> <timePeriod> [startHH:mm] [endHH:mm]
+                
+                filter charging points <locationId|*> <AC|DC|*> <AVAILABLE|OCCUPIED|OUT_OF_ORDER|*> <maxPricePerKwh|*>
+                  examples:
+                    filter charging points L1 AC AVAILABLE 0.30
+                    filter charging points * DC * *
+                
+                correct balance <customerId> <amount> <reason_with_underscores>
+                """);
+    }
+
+    private static void printCustomerHelp() {
+        System.out.println("""
+                
+                CUSTOMER COMMANDS (full syntax)
+                create customer <firstName> <lastName>
+                login <firstName> <lastName>
+                logout
+                delete account
+                
+                show locations
+                show charging points
+                show prices <locationId>
+                show network status
+                
+                filter charging points <locationId|*> <AC|DC|*> <AVAILABLE|OCCUPIED|OUT_OF_ORDER|*> <maxPricePerKwh|*>
+                  examples:
+                    filter charging points L1 AC AVAILABLE 0.30
+                    filter charging points * DC * *
+                
+                topup <amount>
+                show balance
+                show invoices
+                
+                start charging session <chargingPointId>
+                stop charging session <sessionId>
+                show session <sessionId>
+                """);
+    }
+
+    private static void printInvoiceStatement(Customer customer,
+                                              InvoiceManager invoiceManager,
+                                              ChargingPointManager chargingPointManager,
+                                              LocationManager locationManager) {
+        Date createdAt = new Date();
+        System.out.println("============================================================");
+        System.out.println("INVOICE / BILLING STATEMENT");
+        if (customer != null) {
+            System.out.println("Customer: " + customer.id() + " - " + customer.firstName() + " " + customer.lastName());
+        }
+        System.out.println("Created: " + formatDisplayDateTime(createdAt));
+        System.out.println("============================================================");
+
+        List<TopUp> topUps = invoiceManager.readTopUps(customer.id());
+        topUps.sort(java.util.Comparator.comparing(TopUp::dateTime));
+        System.out.println("\nTOP-UPS (sorted by date)");
+        if (topUps.isEmpty()) {
+            System.out.println("  (none)");
+        } else {
+            for (TopUp topUp : topUps) {
+                System.out.println("  " + formatDisplayDateTime(topUp.dateTime()) + " | " + topUp.id() + " | +" + money(topUp.amount()) + " EUR");
+            }
+        }
+
+        List<Invoice> invoices = invoiceManager.readInvoices(customer.id());
+        invoices.sort(java.util.Comparator.comparing(inv -> inv.sessions().stream()
+                .map(ChargingSession::startTime)
+                .filter(java.util.Objects::nonNull)
+                .min(Date::compareTo)
+                .orElse(new Date(0))));
+
+        System.out.println("\nBILLING ITEMS (sorted by session start)");
+        if (invoices.isEmpty()) {
+            System.out.println("  (none)");
+        } else {
+            for (Invoice invoice : invoices) {
+                List<ChargingSession> sessions = new java.util.ArrayList<>(invoice.sessions());
+                sessions.sort(java.util.Comparator.comparing(ChargingSession::startTime));
+                for (ChargingSession session : sessions) {
+                    ChargingPoint cp = chargingPointManager.readChargingPoint(session.chargingPointId());
+                    String locationName = "UNKNOWN";
+                    String locationId = "UNKNOWN";
+                    String mode = "UNKNOWN";
+                    if (cp != null) {
+                        mode = cp.type().name();
+                        Location loc = locationManager.readLocation(cp.locationId());
+                        if (loc != null) {
+                            locationName = loc.name();
+                            locationId = loc.id();
+                        }
+                    }
+
+                    long durationMin = 0;
+                    if (session.startTime() != null && session.endTime() != null) {
+                        durationMin = (session.endTime().getTime() - session.startTime().getTime()) / 60000;
+                    }
+
+                    double energyCost = session.kWhCharged() * session.pricePerKwh();
+                    double parkingCost = durationMin * session.pricePerMinute();
+
+                    System.out.println("  " + invoice.id() + " | " + formatDisplayDateTime(session.startTime()) +
+                            " | " + locationName + " (" + locationId + ") | " + session.chargingPointId() + " | " + mode);
+                    System.out.println("     Duration: " + durationMin + " min");
+                    System.out.println("     Energy: " + String.format(Locale.ROOT, "%.2f", session.kWhCharged()) + " kWh");
+                    System.out.println("     Prices (locked at start):");
+                    System.out.println("        " + money(session.pricePerKwh()) + " EUR/kWh (" + mode + ")  |  " +
+                            money(session.pricePerMinute()) + " EUR/min (" + mode + ")");
+                    System.out.println("     Energy cost:  " + money(energyCost) + " EUR");
+                    System.out.println("     Parking cost: " + money(parkingCost) + " EUR");
+                    System.out.println("     TOTAL:        " + money(session.totalCost()) + " EUR");
+                    System.out.println("     Status: " + invoice.status());
+                }
+            }
+        }
+
+        double topUpTotal = topUps.stream().mapToDouble(TopUp::amount).sum();
+        double paidTotal = invoices.stream()
+                .filter(i -> i.status() == InvoiceStatus.PAID)
+                .mapToDouble(Invoice::totalCost)
+                .sum();
+        double correctionTotal = invoiceManager.readBalanceAdjustments(customer.id())
+                .stream()
+                .mapToDouble(BalanceAdjustment::amount)
+                .sum();
+
+        System.out.println("\n------------------------------------------------------------");
+        System.out.println("Balance:");
+        System.out.println("  Top-ups total:        " + money(topUpTotal) + " EUR");
+        System.out.println("  Paid billing total:   -" + money(paidTotal) + " EUR");
+        System.out.println("  Corrections total:     " + money(correctionTotal) + " EUR");
+        System.out.println("  CURRENT BALANCE:      " + money(invoiceManager.readBalance(customer.id())) + " EUR");
+        System.out.println("============================================================");
+    }
+
     // ✅ "Login state" for the customer CLI
     private static Customer loggedInCustomer = null;
 
@@ -67,8 +265,8 @@ public class ElectricChargingPointNetwork {
         locationManager.createLocation("L10", "Bregenz Hafen", "Seestrasse 4");
 
 
-        locationManager.defineTariff("L1", 0.20, 0.15, 0.09, 0.01, "DAY", LocalTime.of(6, 0), LocalTime.of(18, 0));
-        locationManager.defineTariff("L1", 0.18, 0.12, 0.08, 0.01, "NIGHT", LocalTime.of(18, 0), LocalTime.of(6, 0));
+        locationManager.defineTariff("L1", 0.20, 0.30, 0.09, 0.14, "DAY", LocalTime.of(6, 0), LocalTime.of(18, 0));
+        locationManager.defineTariff("L1", 0.18, 0.28, 0.08, 0.12, "NIGHT", LocalTime.of(18, 0), LocalTime.of(6, 0));
         locationManager.defineTariff("L2", 0.11, 0.50, 0.06, 0.25, "DAY", LocalTime.of(6, 0), LocalTime.of(18, 0));
         locationManager.defineTariff("L2", 0.10, 0.45, 0.05, 0.22, "NIGHT", LocalTime.of(18, 0), LocalTime.of(6, 0));
         locationManager.defineTariff("L3", 0.22, 0.75, 0.08, 0.30, "PEAK", LocalTime.of(8, 0), LocalTime.of(12, 0));
@@ -179,39 +377,17 @@ public class ElectricChargingPointNetwork {
             ChargingSessionManager chargingSessionManager,
             InvoiceManager invoiceManager
     ) {
-        System.out.println("""
-                
-                OPERATOR COMMANDS:
-                show locations
-                show charging points
-                show customers
-                show prices
-                show network status
-                
-                show sessions
-                show session <sessionId>
-                
-                show billing <customerId>   (US-12)
-                
-                create location <id> <name_with_underscores> <address_with_underscores>
-                update location <id> <name_with_underscores> <address_with_underscores>
-                delete location <id>
-                create charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
-                update charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
-                delete charging point <id>
-                update charging point status <id> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
-                define tariff <locationId> <kWhAC> <kWhDC> <parkingMinAC> <parkingMinDC> <timePeriod> <startHH:mm> <endHH:mm>
-                update tariff <locationId> <kWhAC> <kWhDC> <parkingMinAC> <parkingMinDC> <timePeriod> [startHH:mm] [endHH:mm]
-                filter charging points <locationId|*> <AC|DC|*> <AVAILABLE|OCCUPIED|OUT_OF_ORDER|*> <maxPricePerKwh|*>
-                correct balance <customerId> <amount> <reason_with_underscores>
-                back
-                """);
+        printOperatorMenu();
 
         while (true) {
             System.out.print("operator> ");
             String input = scanner.nextLine().trim();
 
             if (input.equalsIgnoreCase("back")) return;
+            if (input.equalsIgnoreCase("help")) {
+                printOperatorHelp();
+                continue;
+            }
 
             if (input.equalsIgnoreCase("show locations")) {
                 locationManager.readAllLocations().forEach(System.out::println);
@@ -282,32 +458,7 @@ public class ElectricChargingPointNetwork {
                     continue;
                 }
 
-                System.out.println("Customer: " + c);
-
-                System.out.println("\nTop-Ups:");
-                var topUps = invoiceManager.readTopUps(customerId);
-                if (topUps.isEmpty()) System.out.println("  (none)");
-                else topUps.forEach(t -> System.out.println("  " + t));
-
-                System.out.println("\nBalance Adjustments:");
-                var adjustments = invoiceManager.readBalanceAdjustments(customerId);
-                if (adjustments.isEmpty()) System.out.println("  (none)");
-                else adjustments.forEach(a -> System.out.println("  " + a));
-
-                System.out.println("\nInvoices:");
-                var invoices = invoiceManager.readInvoices(customerId);
-                if (invoices.isEmpty()) {
-                    System.out.println("  (none)");
-                } else {
-                    for (Invoice inv : invoices) {
-                        System.out.println("  " + inv);
-                        for (ChargingSession session : inv.sessions()) {
-                            System.out.println("    " + session);
-                        }
-                    }
-                }
-
-                System.out.println("\nBalance: " + money(invoiceManager.readBalance(customerId)));
+                printInvoiceStatement(c, invoiceManager, chargingPointManager, locationManager);
                 continue;
             }
 
@@ -543,32 +694,17 @@ public class ElectricChargingPointNetwork {
             ChargingSessionManager chargingSessionManager,
             InvoiceManager invoiceManager
     ) {
-        System.out.println("""
-                
-                CUSTOMER COMMANDS:
-                create customer <firstName> <lastName>
-                login <firstName> <lastName>
-                logout
-                show locations
-                show charging points
-                show prices <locationId>
-                show network status
-                filter charging points <locationId|*> <AC|DC|*> <AVAILABLE|OCCUPIED|OUT_OF_ORDER|*> <maxPricePerKwh|*>
-                topup <amount>
-                show balance
-                show invoices
-                start charging session <chargingPointId>
-                stop charging session <sessionId>
-                show session
-                delete account
-                back
-                """);
+        printCustomerMenu();
 
         while (true) {
             System.out.print("customer> ");
             String input = scanner.nextLine().trim();
 
             if (input.equalsIgnoreCase("back")) return;
+            if (input.equalsIgnoreCase("help")) {
+                printCustomerHelp();
+                continue;
+            }
 
             if (input.toLowerCase(Locale.ROOT).startsWith("create customer")) {
                 String[] parts = input.split("\\s+");
@@ -732,97 +868,7 @@ public class ElectricChargingPointNetwork {
                     continue;
                 }
 
-                var invoices = invoiceManager.readInvoices(loggedInCustomer.id());
-
-                if (invoices.isEmpty()) {
-                    System.out.println("(no invoices)");
-                } else {
-                    invoices.sort(java.util.Comparator.comparing(inv -> inv.sessions().stream()
-                            .map(ChargingSession::startTime)
-                            .filter(java.util.Objects::nonNull)
-                            .min(Date::compareTo)
-                            .orElse(new Date(0))));
-                    int itemNo = 1;
-                    for (Invoice inv : invoices) {
-                        List<ChargingSession> sessions = new java.util.ArrayList<>(inv.sessions());
-                        sessions.sort(java.util.Comparator.comparing(ChargingSession::startTime));
-
-                        System.out.printf(
-                                Locale.ROOT,
-                                "%d) invoice=%s | total=%.2f | status=%s%n",
-                                itemNo++,
-                                inv.id(),
-                                inv.totalCost(),
-                                inv.status()
-                        );
-
-                        int lineNo = 1;
-                        for (ChargingSession s : sessions) {
-                            ChargingPoint cp = chargingPointManager.readChargingPoint(s.chargingPointId());
-
-                            String locationName = "UNKNOWN";
-                            String mode = "UNKNOWN";
-
-                            if (cp != null) {
-                                mode = cp.type().name();
-                                Location loc = locationManager.readLocation(cp.locationId());
-                                if (loc != null) {
-                                    locationName = loc.name();
-                                }
-                            }
-
-                            long durationMin = 0;
-                            if (s.startTime() != null && s.endTime() != null) {
-                                durationMin = (s.endTime().getTime() - s.startTime().getTime()) / 60000;
-                            }
-
-                            double pricePerKwh = s.pricePerKwh();
-                            double parkingPerMin = s.pricePerMinute();
-
-                            double energyCost = s.kWhCharged() * pricePerKwh;
-                            double parkingCost = durationMin * parkingPerMin;
-
-                            System.out.printf(
-                                    Locale.ROOT,
-                                    "  %d.%d) %s | cp=%s | mode=%s | duration=%d min | energy=%.2f kWh @ %.2f | energyCost=%.2f | parkingCost=%.2f | total=%.2f | tariff=%s%n",
-                                    itemNo - 1,
-                                    lineNo++,
-                                    locationName,
-                                    s.chargingPointId(),
-                                    mode,
-                                    durationMin,
-                                    s.kWhCharged(),
-                                    pricePerKwh,
-                                    energyCost,
-                                    parkingCost,
-                                    s.totalCost(),
-                                    s.timePeriod()
-                            );
-                        }
-                    }
-                }
-
-                System.out.println("Top-ups (sorted by time):");
-                var topUps = invoiceManager.readTopUps(loggedInCustomer.id());
-                if (topUps.isEmpty()) {
-                    System.out.println("(no top-ups)");
-                } else {
-                    topUps.stream()
-                            .sorted(java.util.Comparator.comparing(TopUp::dateTime))
-                            .forEach(t -> System.out.println("  " + t));
-                }
-
-                System.out.println("Balance adjustments (sorted by time):");
-                var adjustments = invoiceManager.readBalanceAdjustments(loggedInCustomer.id());
-                if (adjustments.isEmpty()) {
-                    System.out.println("(no adjustments)");
-                } else {
-                    adjustments.stream()
-                            .sorted(java.util.Comparator.comparing(BalanceAdjustment::dateTime))
-                            .forEach(a -> System.out.println("  " + a));
-                }
-
-                System.out.println("Current balance: " + money(invoiceManager.readBalance(loggedInCustomer.id())));
+                printInvoiceStatement(loggedInCustomer, invoiceManager, chargingPointManager, locationManager);
                 continue;
             }
             if (input.toLowerCase(Locale.ROOT).startsWith("start charging session")) {

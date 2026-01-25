@@ -33,7 +33,6 @@ public class ChargingSessionManager {
                 pricePerMinute,
                 timePeriod
         ));
-
     }
 
     // End session and store final values

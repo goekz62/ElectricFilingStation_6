@@ -12,7 +12,7 @@ Feature: Customer EPIC 4 - Start Charging Session
     And the current time is "2026-01-17T10:00"
     And location "L1" has tariff
       | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
-      | 0.20  | 0.15  | 0.09  | 0.01  | DAY        | 06:00     | 18:00   |
+      | 0.20  | 0.30  | 0.09  | 0.12  | DAY        | 06:00     | 18:00   |
     And there are customers
       | firstName | lastName |
       | Nisa      | Yesillik |

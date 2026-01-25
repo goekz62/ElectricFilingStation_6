@@ -25,6 +25,7 @@ public class StepDefinitions {
     private List<ChargingPoint> lastFilteredChargingPoints;
     private Throwable lastError;
 
+
     private CustomerManager customerManager;
     private Customer createdCustomer;
     private Customer identifiedCustomer;
@@ -58,7 +59,6 @@ public class StepDefinitions {
     private Date priceCheckTimeOrNow() {
         return priceCheckTime == null ? new Date() : priceCheckTime;
     }
-
 
     // =========================================================
     // Common Setup

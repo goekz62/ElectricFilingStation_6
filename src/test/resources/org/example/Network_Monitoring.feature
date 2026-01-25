@@ -30,19 +30,19 @@ Feature: EPIC 3 - Network Monitoring
       | L2 | Graz East     | Hauptstrasse 5  |
     And the operator defines a tariff for location "L1" with:
       | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
-      | 0.20  | 0.15  | 0.09  | 0.01  | DAY        | 06:00     | 18:00   |
+      | 0.20  | 0.30  | 0.09  | 0.12  | DAY        | 06:00     | 18:00   |
     And the operator defines a tariff for location "L2" with:
       | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
-      | 0.25  | 0.18  | 0.10  | 0.02  | DAY        | 06:00     | 18:00   |
+      | 0.25  | 0.35  | 0.10  | 0.15  | DAY        | 06:00     | 18:00   |
     And the current time is "2026-01-17T10:00"
     When the operator requests current prices for all locations
     Then the system returns current prices for 2 locations
     And location "L1" current price is
       | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
-      | 0.20  | 0.15  | 0.09  | 0.01  | DAY        | 06:00     | 18:00   |
+      | 0.20  | 0.30  | 0.09  | 0.12  | DAY        | 06:00     | 18:00   |
     And location "L2" current price is
       | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
-      | 0.25  | 0.18  | 0.10  | 0.02  | DAY        | 06:00     | 18:00   |
+      | 0.25  | 0.35  | 0.10  | 0.15  | DAY        | 06:00     | 18:00   |
 
   # ------------------------------------------------------------
   # Edge case - no available charging points
@@ -70,10 +70,10 @@ Feature: EPIC 3 - Network Monitoring
       | CP3 | L2         | AC   | AVAILABLE |
     And the operator defines a tariff for location "L1" with:
       | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
-      | 0.20  | 0.45  | 0.09  | 0.01  | DAY        | 06:00     | 18:00   |
+      | 0.20  | 0.45  | 0.09  | 0.12  | DAY        | 06:00     | 18:00   |
     And the operator defines a tariff for location "L2" with:
       | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
-      | 0.30  | 0.50  | 0.10  | 0.02  | DAY        | 06:00     | 18:00   |
+      | 0.30  | 0.50  | 0.10  | 0.15  | DAY        | 06:00     | 18:00   |
     And the current time is "2026-01-17T10:00"
     When the operator filters charging points at location "L1" with type "AC" and max price 0.25
     Then the system returns 1 filtered charging points
@@ -94,12 +94,12 @@ Feature: EPIC 3 - Network Monitoring
       | CP2 | L1         | DC   | OUT_OF_ORDER|
     And the operator defines a tariff for location "L1" with:
       | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
-      | 0.20  | 0.15  | 0.09  | 0.01  | DAY        | 06:00     | 18:00   |
+      | 0.20  | 0.30  | 0.09  | 0.12  | DAY        | 06:00     | 18:00   |
     And the current time is "2026-01-17T10:00"
     When the operator requests the network status
     Then the network status includes location "L1" with tariff
       | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
-      | 0.20  | 0.15  | 0.09  | 0.01  | DAY        | 06:00     | 18:00   |
+      | 0.20  | 0.30  | 0.09  | 0.12  | DAY        | 06:00     | 18:00   |
     And the network status includes charging points for location "L1"
       | id  |
       | CP1 |

@@ -16,10 +16,10 @@ Feature: Customer EPIC 3 - View Network
     And the current time is "2026-01-17T10:00"
     And location "L1" has tariff
       | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
-      | 0.20  | 0.15  | 0.09  | 0.01  | DAY        | 06:00     | 18:00   |
+      | 0.20  | 0.30  | 0.09  | 0.12  | DAY        | 06:00     | 18:00   |
     And location "L2" has tariff
       | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
-      | 0.18  | 0.25  | 0.08  | 0.03  | DAY        | 06:00     | 18:00   |
+      | 0.18  | 0.25  | 0.08  | 0.12  | DAY        | 06:00     | 18:00   |
 
   # ---------------------------
   # US-6 View all AC/DC charging points
@@ -43,7 +43,7 @@ Feature: Customer EPIC 3 - View Network
 
   Scenario: Customer views current price for a selected charging point (DC)
     When the customer requests current price for charging point "CP2"
-    Then the system shows price per kWh 0.15 and parking per minute 0.01
+    Then the system shows price per kWh 0.30 and parking per minute 0.12
 
   # ---------------------------
   # Edge case: no charging points

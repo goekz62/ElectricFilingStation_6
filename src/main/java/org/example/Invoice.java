@@ -9,9 +9,7 @@ public record Invoice(
         List<ChargingSession> sessions,
         Date createdAt,
         InvoiceStatus status
-)
-
-{
+) {
     public double totalCost() {
         return sessions.stream()
                 .mapToDouble(ChargingSession::totalCost)

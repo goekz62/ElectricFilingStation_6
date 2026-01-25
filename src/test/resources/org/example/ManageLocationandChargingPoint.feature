@@ -56,7 +56,6 @@ Feature: EPIC 1 - Manage Locations and Charging Points
       | id  | type | status   |
       | CP1 | DC   | OCCUPIED |
 
-
   Scenario: Delete a charging point
     Given a location exists with id "L1", name "Vienna Center", address "Stephansplatz 1"
     And the operator adds a charging point with id "CP1" and type "AC" and status "AVAILABLE" to location "L1"
@@ -67,9 +66,16 @@ Feature: EPIC 1 - Manage Locations and Charging Points
   # ---------------------------------------------------------
   Scenario: View all locations
     Given the network has locations
-      | id | name          | address          |
-      | L1 | Vienna Center  | Stephansplatz 1  |
-      | L2 | Graz East      | Hauptstrasse 5   |
-      | L3 | Graz North     | Hauptstrasse 7   |
+      | id  | name               | address                 |
+      | L1  | Vienna Center      | Stephansplatz 1         |
+      | L2  | Graz East          | Hauptstrasse 5          |
+      | L3  | Graz North         | Hauptstrasse 7          |
+      | L4  | Linz Center        | Landstrasse 12          |
+      | L5  | Salzburg West      | Getreidegasse 8         |
+      | L6  | Innsbruck Mitte    | Maria-Theresien-Strasse 3 |
+      | L7  | Klagenfurt Süd     | Villacher Strasse 20    |
+      | L8  | St. Pölten Zentrum | Rathausplatz 1          |
+      | L9  | Wels Nord          | Bahnhofstrasse 9        |
+      | L10 | Bregenz Hafen      | Seestrasse 4            |
     When the operator requests all locations
-    Then the system returns 3 locations
+    Then the system returns 10 locations

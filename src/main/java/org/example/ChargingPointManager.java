@@ -11,9 +11,7 @@ public class ChargingPointManager {
             String locationId,
             ChargingType type,
             ChargingPointStatus status
-    )
-
-    {
+    ) {
         if (points.containsKey(id)) {
             throw new IllegalArgumentException("Charging point already exists: " + id);
         }

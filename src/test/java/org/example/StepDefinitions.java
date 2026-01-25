@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Locale;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
@@ -20,6 +21,8 @@ public class StepDefinitions {
     private ChargingPointManager chargingPointManager;
 
     private List<Location> lastLocations;
+    private List<ChargingPoint> lastChargingPoints;
+    private List<ChargingPoint> lastFilteredChargingPoints;
     private Exception lastError;
 
     private CustomerManager customerManager;
@@ -36,6 +39,8 @@ public class StepDefinitions {
 
     private List<ChargingPoint> lastAvailablePoints;
     private Map<String, Tariff> lastPricesByLocation;
+    private List<NetworkStatusEntry> lastNetworkStatus;
+    private Date priceCheckTime;
 
     private String currentCustomerId;
 
@@ -44,6 +49,14 @@ public class StepDefinitions {
     private Date parseIsoDateTime(String text) {
         LocalDateTime ldt = LocalDateTime.parse(text, ISO_DT);
         return Date.from(ldt.atZone(ZoneId.systemDefault()).toInstant());
+    }
+
+    private LocalTime parseTime(String text) {
+        return LocalTime.parse(text);
+    }
+
+    private Date priceCheckTimeOrNow() {
+        return priceCheckTime == null ? new Date() : priceCheckTime;
     }
 
     // =========================================================
@@ -56,6 +69,7 @@ public class StepDefinitions {
         chargingPointManager = new ChargingPointManager();
         lastLocations = null;
         lastError = null;
+        priceCheckTime = null;
     }
 
     @Given("the network has locations")
@@ -79,6 +93,11 @@ public class StepDefinitions {
         if (locationManager.readLocation(id) == null) {
             locationManager.createLocation(id, name, address);
         }
+    }
+
+    @Given("the current time is {string}")
+    public void the_current_time_is(String timeText) {
+        priceCheckTime = parseIsoDateTime(timeText);
     }
 
     // =========================================================
@@ -112,6 +131,26 @@ public class StepDefinitions {
         assertNotNull(loc);
         assertEquals(id, loc.id());
         assertEquals(name, loc.name());
+    }
+
+    @When("the operator updates location {string} with name {string} and address {string}")
+    public void the_operator_updates_location(String id, String name, String address) {
+        lastError = null;
+        try {
+            locationManager.updateLocation(id, name, address);
+        } catch (Exception e) {
+            lastError = e;
+        }
+    }
+
+    @When("the operator deletes location {string}")
+    public void the_operator_deletes_location(String id) {
+        lastError = null;
+        try {
+            locationManager.deleteLocation(id);
+        } catch (Exception e) {
+            lastError = e;
+        }
     }
 
     // =========================================================
@@ -152,6 +191,62 @@ public class StepDefinitions {
     public void location_has_charging_points(String locationId, int expected) {
         assertNotNull(chargingPointManager);
         assertEquals(expected, chargingPointManager.countByLocation(locationId));
+    }
+
+    @When("the operator updates charging point {string} to location {string} with type {string} and status {string}")
+    public void the_operator_updates_charging_point(String cpId, String locationId, String type, String status) {
+        lastError = null;
+        try {
+            chargingPointManager.updateChargingPoint(
+                    cpId,
+                    locationId,
+                    ChargingType.valueOf(type.toUpperCase(Locale.ROOT)),
+                    ChargingPointStatus.valueOf(status.toUpperCase(Locale.ROOT))
+            );
+        } catch (Exception e) {
+            lastError = e;
+        }
+    }
+
+    @When("the operator deletes charging point {string}")
+    public void the_operator_deletes_charging_point(String cpId) {
+        lastError = null;
+        try {
+            chargingPointManager.deleteChargingPoint(cpId);
+        } catch (Exception e) {
+            lastError = e;
+        }
+    }
+
+    @When("the operator requests all charging points")
+    public void the_operator_requests_all_charging_points_list() {
+        assertNotNull(chargingPointManager);
+        lastChargingPoints = chargingPointManager.readAllChargingPoints();
+    }
+
+    @Then("the charging points include")
+    public void the_charging_points_include_operator(DataTable table) {
+        List<ChargingPoint> points = lastChargingPoints != null ? lastChargingPoints : lastCustomerChargingPoints;
+        assertNotNull(points);
+
+        for (Map<String, String> row : table.asMaps(String.class, String.class)) {
+            String expId = row.get("id");
+            String expType = row.getOrDefault("type", null);
+            String expStatus = row.getOrDefault("status", null);
+
+            ChargingPoint cp = points.stream()
+                    .filter(p -> p.id().equals(expId))
+                    .findFirst()
+                    .orElse(null);
+
+            assertNotNull(cp, "Expected charging point not found: " + expId);
+            if (expType != null) {
+                assertEquals(ChargingType.valueOf(expType), cp.type());
+            }
+            if (expStatus != null) {
+                assertEquals(ChargingPointStatus.valueOf(expStatus), cp.status());
+            }
+        }
     }
 
     // =========================================================
@@ -196,10 +291,22 @@ public class StepDefinitions {
         double kWhDC = Double.parseDouble(row.get("kWhDC"));
         double minAC = Double.parseDouble(row.get("minAC"));
         double minDC = Double.parseDouble(row.get("minDC"));
+        String timePeriod = row.getOrDefault("timePeriod", "ALL_DAY");
+        String startText = row.getOrDefault("startTime", "00:00");
+        String endText = row.getOrDefault("endTime", "23:59");
 
         lastError = null;
         try {
-            locationManager.defineTariff(locationId, kWhAC, kWhDC, minAC, minDC);
+            locationManager.defineTariff(
+                    locationId,
+                    kWhAC,
+                    kWhDC,
+                    minAC,
+                    minDC,
+                    timePeriod,
+                    parseTime(startText),
+                    parseTime(endText)
+            );
         } catch (Exception e) {
             lastError = e;
         }
@@ -213,10 +320,13 @@ public class StepDefinitions {
         double kWhDC = Double.parseDouble(row.get("kWhDC"));
         double minAC = Double.parseDouble(row.get("minAC"));
         double minDC = Double.parseDouble(row.get("minDC"));
+        String timePeriod = row.getOrDefault("timePeriod", null);
+        LocalTime startTime = row.containsKey("startTime") ? parseTime(row.get("startTime")) : null;
+        LocalTime endTime = row.containsKey("endTime") ? parseTime(row.get("endTime")) : null;
 
         lastError = null;
         try {
-            locationManager.updateTariff(locationId, kWhAC, kWhDC, minAC, minDC);
+            locationManager.updateTariff(locationId, kWhAC, kWhDC, minAC, minDC, timePeriod, startTime, endTime);
         } catch (Exception e) {
             lastError = e;
         }
@@ -230,17 +340,26 @@ public class StepDefinitions {
         double expKWhDC = Double.parseDouble(row.get("kWhDC"));
         double expMinAC = Double.parseDouble(row.get("minAC"));
         double expMinDC = Double.parseDouble(row.get("minDC"));
+        String expTimePeriod = row.getOrDefault("timePeriod", "ALL_DAY");
+        String startText = row.getOrDefault("startTime", "00:00");
+        String endText = row.getOrDefault("endTime", "23:59");
 
         Location loc = locationManager.readLocation(locationId);
         assertNotNull(loc, "Location not found: " + locationId);
-        assertNotNull(loc.tariff(), "Tariff not defined for location: " + locationId);
+        assertFalse(loc.tariffs().isEmpty(), "Tariff not defined for location: " + locationId);
 
-        Tariff t = loc.tariff();
+        Tariff t = loc.tariffs().stream()
+                .filter(tariff -> tariff.timePeriod().equals(expTimePeriod))
+                .findFirst()
+                .orElseThrow();
 
         assertEquals(expKWhAC, t.pricePerKwhAC(), 0.00001);
         assertEquals(expKWhDC, t.pricePerKwhDC(), 0.00001);
         assertEquals(expMinAC, t.pricePerMinuteAC(), 0.00001);
         assertEquals(expMinDC, t.pricePerMinuteDC(), 0.00001);
+        assertEquals(expTimePeriod, t.timePeriod());
+        assertEquals(parseTime(startText), t.startTime());
+        assertEquals(parseTime(endText), t.endTime());
     }
 
     // =========================================================
@@ -296,13 +415,7 @@ public class StepDefinitions {
     @When("the operator requests current prices for all locations")
     public void the_operator_requests_current_prices_for_all_locations() {
         assertNotNull(locationManager);
-
-        lastPricesByLocation = new java.util.LinkedHashMap<>();
-        for (Location loc : locationManager.readAllLocations()) {
-            if (loc.tariff() != null) {
-                lastPricesByLocation.put(loc.id(), loc.tariff());
-            }
-        }
+        lastPricesByLocation = locationManager.readCurrentPricesByLocation(priceCheckTimeOrNow());
     }
 
     @Then("the system returns current prices for {int} locations")
@@ -321,6 +434,9 @@ public class StepDefinitions {
         double expKWhDC = Double.parseDouble(row.get("kWhDC"));
         double expMinAC = Double.parseDouble(row.get("minAC"));
         double expMinDC = Double.parseDouble(row.get("minDC"));
+        String expTimePeriod = row.getOrDefault("timePeriod", "ALL_DAY");
+        String startText = row.getOrDefault("startTime", "00:00");
+        String endText = row.getOrDefault("endTime", "23:59");
 
         Tariff t = lastPricesByLocation.get(locationId);
         assertNotNull(t, "No tariff found for location: " + locationId);
@@ -329,6 +445,141 @@ public class StepDefinitions {
         assertEquals(expKWhDC, t.pricePerKwhDC(), 0.00001);
         assertEquals(expMinAC, t.pricePerMinuteAC(), 0.00001);
         assertEquals(expMinDC, t.pricePerMinuteDC(), 0.00001);
+        assertEquals(expTimePeriod, t.timePeriod());
+        assertEquals(parseTime(startText), t.startTime());
+        assertEquals(parseTime(endText), t.endTime());
+    }
+
+    @When("the operator requests the network status")
+    public void the_operator_requests_the_network_status() {
+        assertNotNull(locationManager);
+        assertNotNull(chargingPointManager);
+        lastNetworkStatus = locationManager.readNetworkStatus(chargingPointManager, priceCheckTimeOrNow());
+    }
+
+    @Then("the network status includes location {string} with tariff")
+    public void the_network_status_includes_location_with_tariff(String locationId, DataTable table) {
+        assertNotNull(lastNetworkStatus);
+        NetworkStatusEntry entry = lastNetworkStatus.stream()
+                .filter(status -> status.location().id().equals(locationId))
+                .findFirst()
+                .orElseThrow();
+
+        Map<String, String> row = table.asMaps(String.class, String.class).get(0);
+        double expKWhAC = Double.parseDouble(row.get("kWhAC"));
+        double expKWhDC = Double.parseDouble(row.get("kWhDC"));
+        double expMinAC = Double.parseDouble(row.get("minAC"));
+        double expMinDC = Double.parseDouble(row.get("minDC"));
+        String expTimePeriod = row.getOrDefault("timePeriod", "ALL_DAY");
+        String startText = row.getOrDefault("startTime", "00:00");
+        String endText = row.getOrDefault("endTime", "23:59");
+
+        Tariff t = entry.currentTariff();
+        assertNotNull(t);
+        assertEquals(expKWhAC, t.pricePerKwhAC(), 0.00001);
+        assertEquals(expKWhDC, t.pricePerKwhDC(), 0.00001);
+        assertEquals(expMinAC, t.pricePerMinuteAC(), 0.00001);
+        assertEquals(expMinDC, t.pricePerMinuteDC(), 0.00001);
+        assertEquals(expTimePeriod, t.timePeriod());
+        assertEquals(parseTime(startText), t.startTime());
+        assertEquals(parseTime(endText), t.endTime());
+    }
+
+    @Then("the network status includes charging points for location {string}")
+    public void the_network_status_includes_charging_points_for_location(String locationId, DataTable table) {
+        assertNotNull(lastNetworkStatus);
+        NetworkStatusEntry entry = lastNetworkStatus.stream()
+                .filter(status -> status.location().id().equals(locationId))
+                .findFirst()
+                .orElseThrow();
+
+        List<String> expectedIds = table.asMaps(String.class, String.class).stream()
+                .map(r -> r.get("id"))
+                .toList();
+
+        List<String> actualIds = entry.chargingPoints().stream()
+                .map(ChargingPoint::id)
+                .toList();
+
+        for (String id : expectedIds) {
+            assertTrue(actualIds.contains(id), "Expected charging point id not found: " + id);
+        }
+    }
+
+    @Given("the seed network is loaded")
+    public void the_seed_network_is_loaded() {
+        locationManager = new LocationManager();
+        chargingPointManager = new ChargingPointManager();
+        customerManager = new CustomerManager();
+
+        for (int i = 1; i <= 10; i++) {
+            locationManager.createLocation("L" + i, "Location " + i, "Address " + i);
+        }
+
+        int cpId = 1;
+        for (int i = 1; i <= 10; i++) {
+            String locationId = "L" + i;
+            chargingPointManager.createChargingPoint("CP" + (cpId++), locationId, ChargingType.AC, ChargingPointStatus.AVAILABLE);
+            chargingPointManager.createChargingPoint("CP" + (cpId++), locationId, ChargingType.DC, ChargingPointStatus.AVAILABLE);
+        }
+
+        customerManager.createCustomer("Judith", "Muellner");
+        customerManager.createCustomer("Katharina", "Weinberger");
+        customerManager.createCustomer("Franz", "Steininger");
+        customerManager.createCustomer("Nisa", "Yesillik");
+        customerManager.createCustomer("Lukas", "Huber");
+    }
+
+    @Then("the system has {int} locations and {int} customers")
+    public void the_system_has_locations_and_customers(int expectedLocations, int expectedCustomers) {
+        assertNotNull(locationManager);
+        assertNotNull(customerManager);
+        assertEquals(expectedLocations, locationManager.readAllLocations().size());
+        assertEquals(expectedCustomers, customerManager.readAllCustomers().size());
+    }
+
+    @Then("each location has between {int} and {int} charging points")
+    public void each_location_has_between_and_charging_points(int min, int max) {
+        assertNotNull(locationManager);
+        assertNotNull(chargingPointManager);
+        for (Location loc : locationManager.readAllLocations()) {
+            long count = chargingPointManager.countByLocation(loc.id());
+            assertTrue(count >= min && count <= max, "Location " + loc.id() + " had " + count + " points");
+        }
+    }
+
+    @When("the operator filters charging points at location {string} with type {string} and max price {double}")
+    public void the_operator_filters_charging_points(String locationId, String type, double maxPrice) {
+        assertNotNull(chargingPointManager);
+        ChargingType cpType = ChargingType.valueOf(type.toUpperCase(Locale.ROOT));
+        lastFilteredChargingPoints = chargingPointManager.filterChargingPoints(
+                locationManager,
+                locationId,
+                cpType,
+                null,
+                maxPrice,
+                priceCheckTimeOrNow()
+        );
+    }
+
+    @Then("the system returns {int} filtered charging points")
+    public void the_system_returns_filtered_charging_points(int expected) {
+        assertNotNull(lastFilteredChargingPoints);
+        assertEquals(expected, lastFilteredChargingPoints.size());
+    }
+
+    @Then("the filtered charging points include")
+    public void the_filtered_charging_points_include(DataTable table) {
+        assertNotNull(lastFilteredChargingPoints);
+        List<String> expectedIds = table.asMaps(String.class, String.class).stream()
+                .map(r -> r.get("id"))
+                .toList();
+        List<String> actualIds = lastFilteredChargingPoints.stream()
+                .map(ChargingPoint::id)
+                .toList();
+        for (String id : expectedIds) {
+            assertTrue(actualIds.contains(id), "Expected filtered CP id not found: " + id);
+        }
     }
 
     // =========================================================
@@ -353,7 +604,25 @@ public class StepDefinitions {
 
         ChargingSessionStatus status = ChargingSessionStatus.valueOf(row.get("status"));
 
-        chargingSessionManager.createFinishedSession(id, customerId, chargingPointId, start, end, kWh, cost, status);
+        String tariffId = row.getOrDefault("tariffId", "T-UNKNOWN");
+        double pricePerKwh = Double.parseDouble(row.getOrDefault("pricePerKwh", "0.0"));
+        double pricePerMinute = Double.parseDouble(row.getOrDefault("pricePerMinute", "0.0"));
+        String timePeriod = row.getOrDefault("timePeriod", "UNKNOWN");
+
+        chargingSessionManager.createFinishedSession(
+                id,
+                customerId,
+                chargingPointId,
+                start,
+                end,
+                kWh,
+                cost,
+                status,
+                tariffId,
+                pricePerKwh,
+                pricePerMinute,
+                timePeriod
+        );
     }
 
     @When("the operator requests charging session {string}")
@@ -425,25 +694,48 @@ public class StepDefinitions {
             currentCustomerId = identifiedCustomer.id();
         }
 
+        Map<String, List<Map<String, String>>> rowsByInvoice = new java.util.LinkedHashMap<>();
         for (Map<String, String> row : table.asMaps(String.class, String.class)) {
+            rowsByInvoice.computeIfAbsent(row.get("invoiceId"), key -> new java.util.ArrayList<>()).add(row);
+        }
 
-            ChargingSession session = new ChargingSession(
-                    row.get("sessionId"),
-                    currentCustomerId,
-                    row.get("chargingPointId"),
-                    parseIsoDateTime(row.get("startTime")),
-                    parseIsoDateTime(row.get("endTime")),
-                    Double.parseDouble(row.get("kWhCharged")),
-                    Double.parseDouble(row.get("totalCost")),
-                    ChargingSessionStatus.FINISHED
-            );
+        for (Map.Entry<String, List<Map<String, String>>> entry : rowsByInvoice.entrySet()) {
+            String invoiceId = entry.getKey();
+            List<ChargingSession> sessions = new java.util.ArrayList<>();
+            Date createdAt = null;
+            InvoiceStatus status = null;
+
+            for (Map<String, String> row : entry.getValue()) {
+                ChargingSession session = new ChargingSession(
+                        row.get("sessionId"),
+                        currentCustomerId,
+                        row.get("chargingPointId"),
+                        parseIsoDateTime(row.get("startTime")),
+                        parseIsoDateTime(row.get("endTime")),
+                        Double.parseDouble(row.get("kWhCharged")),
+                        Double.parseDouble(row.get("totalCost")),
+                        ChargingSessionStatus.FINISHED,
+                        row.getOrDefault("tariffId", "T-UNKNOWN"),
+                        Double.parseDouble(row.getOrDefault("pricePerKwh", "0.0")),
+                        Double.parseDouble(row.getOrDefault("pricePerMinute", "0.0")),
+                        row.getOrDefault("timePeriod", "UNKNOWN")
+                );
+                sessions.add(session);
+
+                if (createdAt == null) {
+                    createdAt = parseIsoDateTime(row.get("endTime"));
+                }
+                if (status == null) {
+                    status = InvoiceStatus.valueOf(row.get("status"));
+                }
+            }
 
             invoiceManager.addInvoice(
-                    row.get("invoiceId"),
+                    invoiceId,
                     currentCustomerId,
-                    session,
-                    parseIsoDateTime(row.get("endTime")),
-                    InvoiceStatus.valueOf(row.get("status"))
+                    sessions,
+                    createdAt,
+                    status
             );
         }
     }
@@ -465,6 +757,26 @@ public class StepDefinitions {
         assertEquals(expectedInvoices, lastInvoices.size());
     }
 
+    @When("the operator corrects the customer balance by {double} with reason {string}")
+    public void the_operator_corrects_customer_balance(double amount, String reason) {
+        if (invoiceManager == null) invoiceManager = new InvoiceManager();
+        assertNotNull(currentCustomerId);
+        invoiceManager.addBalanceAdjustment(
+                "ADJ1",
+                currentCustomerId,
+                amount,
+                new Date(),
+                reason
+        );
+    }
+
+    @Then("the system returns {int} balance adjustments")
+    public void the_system_returns_balance_adjustments(int expected) {
+        assertNotNull(invoiceManager);
+        assertNotNull(currentCustomerId);
+        assertEquals(expected, invoiceManager.readBalanceAdjustments(currentCustomerId).size());
+    }
+
     @Then("invoice {string} includes session {string} on charging point {string} with total cost {double}")
     public void invoice_includes_session_on_cp_with_total_cost(String invoiceId, String sessionId, String chargingPointId, double totalCost) {
         assertNotNull(lastInvoices);
@@ -475,9 +787,26 @@ public class StepDefinitions {
                 .orElse(null);
 
         assertNotNull(invoice, "Invoice not found: " + invoiceId);
-        assertEquals(sessionId, invoice.session().id());
-        assertEquals(chargingPointId, invoice.session().chargingPointId());
-        assertEquals(totalCost, invoice.session().totalCost(), 0.0001);
+        ChargingSession session = invoice.sessions().stream()
+                .filter(s -> s.id().equals(sessionId))
+                .findFirst()
+                .orElse(null);
+        assertNotNull(session, "Session not found in invoice: " + sessionId);
+        assertEquals(chargingPointId, session.chargingPointId());
+        assertEquals(totalCost, session.totalCost(), 0.0001);
+    }
+
+    @Then("invoice {string} has {int} sessions")
+    public void invoice_has_sessions(String invoiceId, int expectedSessions) {
+        assertNotNull(lastInvoices);
+
+        Invoice invoice = lastInvoices.stream()
+                .filter(i -> i.id().equals(invoiceId))
+                .findFirst()
+                .orElse(null);
+
+        assertNotNull(invoice, "Invoice not found: " + invoiceId);
+        assertEquals(expectedSessions, invoice.sessions().size());
     }
 
     // =========================================================
@@ -493,13 +822,39 @@ public class StepDefinitions {
     @When("a customer registers with first name {string} and last name {string}")
     public void a_customer_registers_with_first_name_and_last_name(String firstName, String lastName) {
         assertNotNull(customerManager, "customerManager must be initialized");
-        createdCustomer = customerManager.createCustomer(firstName, lastName);
+        lastError = null;
+        createdCustomer = null;
+        try {
+            createdCustomer = customerManager.createCustomer(firstName, lastName);
+        } catch (Exception e) {
+            lastError = e;
+        }
     }
 
     @Then("the system creates the customer")
     public void the_system_creates_the_customer() {
         assertNotNull(createdCustomer, "Expected a created customer but got null");
         assertNotNull(createdCustomer.id(), "Customer id must not be null");
+    }
+
+    @When("the customer updates their name to first name {string} and last name {string}")
+    public void the_customer_updates_their_name(String firstName, String lastName) {
+        assertNotNull(createdCustomer, "Customer must be created first");
+        customerManager.updateCustomer(createdCustomer.id(), firstName, lastName);
+        createdCustomer = customerManager.readCustomer(createdCustomer.id());
+    }
+
+    @When("the customer deletes their account")
+    public void the_customer_deletes_their_account() {
+        assertNotNull(createdCustomer, "Customer must be created first");
+        customerManager.deleteCustomer(createdCustomer.id());
+        createdCustomer = null;
+    }
+
+    @Then("the system returns {int} customers")
+    public void the_system_returns_customers(int expected) {
+        assertNotNull(customerManager);
+        assertEquals(expected, customerManager.readAllCustomers().size());
     }
 
     @Then("the customer id starts with {string}")
@@ -581,12 +936,30 @@ public class StepDefinitions {
         invoiceManager.addTopUp(topUpId, identifiedCustomer.id(), amount, new Date());
     }
 
-    @Then("the customer balance is {double}")
-    public void the_customer_balance_is(double expected) {
+    @When("the customer attempts to top up amount {double}")
+    public void the_customer_attempts_to_top_up_amount(double amount) {
         assertNotNull(invoiceManager, "invoiceManager must be initialized");
         assertNotNull(identifiedCustomer, "Customer must be identified first");
 
-        double actual = invoiceManager.readBalance(identifiedCustomer.id());
+        lastError = null;
+        try {
+            String topUpId = "T_ERR_" + System.currentTimeMillis();
+            invoiceManager.addTopUp(topUpId, identifiedCustomer.id(), amount, new Date());
+        } catch (Exception e) {
+            lastError = e;
+        }
+    }
+
+    @Then("the customer balance is {double}")
+    public void the_customer_balance_is(double expected) {
+        assertNotNull(invoiceManager, "invoiceManager must be initialized");
+        String customerId = currentCustomerId;
+        if (customerId == null && identifiedCustomer != null) {
+            customerId = identifiedCustomer.id();
+        }
+        assertNotNull(customerId, "Customer must be identified first");
+
+        double actual = invoiceManager.readBalance(customerId);
         assertEquals(expected, actual, 0.0001);
     }
 
@@ -611,8 +984,8 @@ public class StepDefinitions {
 
     private List<ChargingPoint> lastCustomerChargingPoints;
     private ChargingPoint lastCustomerSelectedChargingPoint;
-    private double lastCustomerKwhPerHour;
-    private double lastCustomerPricePerMinute;
+    private double lastCustomerPricePerKwh;
+    private double lastCustomerParkingPerMinute;
 
     // --- helper step: define tariff directly for a location (customer scenarios need tariffs) ---
     @Given("location {string} has tariff")
@@ -625,14 +998,18 @@ public class StepDefinitions {
         double kWhDC = Double.parseDouble(row.get("kWhDC"));
         double minAC = Double.parseDouble(row.get("minAC"));
         double minDC = Double.parseDouble(row.get("minDC"));
+        String timePeriod = row.getOrDefault("timePeriod", "ALL_DAY");
+        String startText = row.getOrDefault("startTime", "00:00");
+        String endText = row.getOrDefault("endTime", "23:59");
 
         // use defineTariff (tariff applies for that location)
-        locationManager.defineTariff(locationId, kWhAC, kWhDC, minAC, minDC);
+        locationManager.defineTariff(locationId, kWhAC, kWhDC, minAC, minDC, timePeriod, parseTime(startText), parseTime(endText));
 
         // quick assert so we fail early if something is wrong
         Location loc = locationManager.readLocation(locationId);
         assertNotNull(loc, "Location not found: " + locationId);
-        assertNotNull(loc.tariff(), "Tariff not set for location: " + locationId);
+        assertFalse(loc.tariffs().isEmpty(), "Tariff not set for location: " + locationId);
+        assertTrue(loc.tariffs().stream().anyMatch(t -> timePeriod.equals(t.timePeriod())));
     }
 
     // ---------------------------
@@ -651,25 +1028,6 @@ public class StepDefinitions {
         assertEquals(expected, lastCustomerChargingPoints.size());
     }
 
-    @Then("the charging points include")
-    public void the_charging_points_include(DataTable table) {
-        assertNotNull(lastCustomerChargingPoints);
-
-        for (Map<String, String> row : table.asMaps(String.class, String.class)) {
-            String expId = row.get("id");
-            String expType = row.get("type");
-            String expStatus = row.get("status");
-
-            ChargingPoint cp = lastCustomerChargingPoints.stream()
-                    .filter(p -> p.id().equals(expId))
-                    .findFirst()
-                    .orElse(null);
-
-            assertNotNull(cp, "Expected charging point not found: " + expId);
-            assertEquals(ChargingType.valueOf(expType), cp.type());
-            assertEquals(ChargingPointStatus.valueOf(expStatus), cp.status());
-        }
-    }
 
     // ---------------------------
 // US-7: Customer views current price for selected charging point
@@ -684,25 +1042,38 @@ public class StepDefinitions {
 
         Location loc = locationManager.readLocation(lastCustomerSelectedChargingPoint.locationId());
         assertNotNull(loc, "Location not found: " + lastCustomerSelectedChargingPoint.locationId());
-        assertNotNull(loc.tariff(), "Tariff not defined for location: " + loc.id());
+        Tariff t = locationManager.readTariffAt(loc.id(), priceCheckTimeOrNow());
+        assertNotNull(t, "Tariff not defined for location: " + loc.id());
 
-        Tariff t = loc.tariff();
-
-        // NEW meaning: kWhAC/kWhDC = charging speed (kWh per hour), minAC/minDC = price per minute
+        // NEW meaning: kWhAC/kWhDC = price per kWh, minAC/minDC = parking price per minute
         if (lastCustomerSelectedChargingPoint.type() == ChargingType.AC) {
-            lastCustomerKwhPerHour = t.pricePerKwhAC();        // kWh per hour
-            lastCustomerPricePerMinute = t.pricePerMinuteAC(); // €/min
+            lastCustomerPricePerKwh = t.pricePerKwhAC();
+            lastCustomerParkingPerMinute = t.pricePerMinuteAC();
         } else {
-            lastCustomerKwhPerHour = t.pricePerKwhDC();
-            lastCustomerPricePerMinute = t.pricePerMinuteDC();
+            lastCustomerPricePerKwh = t.pricePerKwhDC();
+            lastCustomerParkingPerMinute = t.pricePerMinuteDC();
         }
     }
 
-    @Then("the system shows charging speed kWhPerHour {double} and pricePerMinute {double}")
-    public void the_system_shows_charging_speed_and_price_per_minute(double expectedKwhPerHour, double expectedPricePerMinute) {
+    @When("the customer filters charging points at location {string} with type {string} and max price {double}")
+    public void the_customer_filters_charging_points(String locationId, String type, double maxPrice) {
+        assertNotNull(chargingPointManager, "chargingPointManager must be initialized");
+        ChargingType cpType = ChargingType.valueOf(type.toUpperCase(Locale.ROOT));
+        lastFilteredChargingPoints = chargingPointManager.filterChargingPoints(
+                locationManager,
+                locationId,
+                cpType,
+                null,
+                maxPrice,
+                priceCheckTimeOrNow()
+        );
+    }
+
+    @Then("the system shows price per kWh {double} and parking per minute {double}")
+    public void the_system_shows_price_per_kwh_and_parking_per_minute(double expectedPricePerKwh, double expectedParkingPerMinute) {
         assertNotNull(lastCustomerSelectedChargingPoint, "No charging point selected");
-        assertEquals(expectedKwhPerHour, lastCustomerKwhPerHour, 0.00001);
-        assertEquals(expectedPricePerMinute, lastCustomerPricePerMinute, 0.00001);
+        assertEquals(expectedPricePerKwh, lastCustomerPricePerKwh, 0.00001);
+        assertEquals(expectedParkingPerMinute, lastCustomerParkingPerMinute, 0.00001);
     }
 
     // =========================================================
@@ -732,6 +1103,12 @@ public class StepDefinitions {
         invoiceManager.addTopUp("T_BAL_" + System.currentTimeMillis(), identifiedCustomer.id(), amount, new java.util.Date());
     }
 
+    @Given("the customer has no balance")
+    public void the_customer_has_no_balance() {
+        assertNotNull(identifiedCustomer, "identifiedCustomer must be set first");
+        invoiceManager = new InvoiceManager();
+    }
+
     // -------------------------
 // US-9 start session
 // -------------------------
@@ -748,15 +1125,92 @@ public class StepDefinitions {
 
         Location loc = locationManager.readLocation(cp.locationId());
         assertNotNull(loc, "Location not found: " + cp.locationId());
-        assertNotNull(loc.tariff(), "Tariff must be defined for location " + loc.id());
+
+        Date startTime = priceCheckTimeOrNow();
+        Tariff tariffAtStart = locationManager.readTariffAt(loc.id(), startTime);
+        assertNotNull(tariffAtStart, "Tariff must be defined for location " + loc.id());
+
+        double pricePerKwh = (cp.type() == ChargingType.AC) ? tariffAtStart.pricePerKwhAC() : tariffAtStart.pricePerKwhDC();
+        double pricePerMinute = (cp.type() == ChargingType.AC) ? tariffAtStart.pricePerMinuteAC() : tariffAtStart.pricePerMinuteDC();
 
         // minimal prepaid check: must have > 0
         assertTrue(invoiceManager.readBalance(identifiedCustomer.id()) > 0, "Customer has no balance");
 
-        lastStartedSession = chargingSessionManager.createSessionAutoId(identifiedCustomer.id(), chargingPointId);
+        lastStartedSession = chargingSessionManager.createSessionAutoIdAtTime(
+                identifiedCustomer.id(),
+                chargingPointId,
+                startTime,
+                tariffAtStart.tariffId(),
+                pricePerKwh,
+                pricePerMinute,
+                tariffAtStart.timePeriod()
+        );
         assertNotNull(lastStartedSession);
 
         lastSessionId = lastStartedSession.id();
+    }
+
+    @When("the customer starts a charging session at {string} on charging point {string}")
+    public void the_customer_starts_a_charging_session_at_time(String timeText, String chargingPointId) {
+        assertNotNull(identifiedCustomer, "Customer must be identified first");
+        if (chargingSessionManager == null) chargingSessionManager = new ChargingSessionManager();
+        if (invoiceManager == null) invoiceManager = new InvoiceManager();
+
+        Date startTime = parseIsoDateTime(timeText);
+
+        ChargingPoint cp = chargingPointManager.readChargingPoint(chargingPointId);
+        assertNotNull(cp, "Charging point not found: " + chargingPointId);
+        assertEquals(ChargingPointStatus.AVAILABLE, cp.status(), "Charging point must be AVAILABLE");
+
+        Location loc = locationManager.readLocation(cp.locationId());
+        assertNotNull(loc, "Location not found: " + cp.locationId());
+
+        Tariff tariffAtStart = locationManager.readTariffAt(loc.id(), startTime);
+        assertNotNull(tariffAtStart, "Tariff must be defined for location " + loc.id());
+
+        double pricePerKwh = (cp.type() == ChargingType.AC) ? tariffAtStart.pricePerKwhAC() : tariffAtStart.pricePerKwhDC();
+        double pricePerMinute = (cp.type() == ChargingType.AC) ? tariffAtStart.pricePerMinuteAC() : tariffAtStart.pricePerMinuteDC();
+
+        assertTrue(invoiceManager.readBalance(identifiedCustomer.id()) > 0, "Customer has no balance");
+
+        lastStartedSession = chargingSessionManager.createSessionAutoIdAtTime(
+                identifiedCustomer.id(),
+                chargingPointId,
+                startTime,
+                tariffAtStart.tariffId(),
+                pricePerKwh,
+                pricePerMinute,
+                tariffAtStart.timePeriod()
+        );
+        assertNotNull(lastStartedSession);
+        lastSessionId = lastStartedSession.id();
+    }
+
+    @When("the customer stops the charging session at {string}")
+    public void the_customer_stops_the_charging_session_at_time(String timeText) {
+        assertNotNull(lastSessionId);
+        Date endTime = parseIsoDateTime(timeText);
+
+        ChargingSession session = chargingSessionManager.readSession(lastSessionId);
+        assertNotNull(session);
+        ChargingPoint cp = chargingPointManager.readChargingPoint(session.chargingPointId());
+        assertNotNull(cp);
+
+        ChargingSessionManager.Calculation calc =
+                chargingSessionManager.calculateForSession(session, endTime, cp.type(), session.pricePerKwh(), session.pricePerMinute());
+
+        chargingSessionManager.endSession(lastSessionId, endTime, calc.kWhCharged(), calc.totalCost());
+        lastLoadedSession = chargingSessionManager.readSession(lastSessionId);
+    }
+
+    @When("the customer attempts to start charging session on charging point {string}")
+    public void the_customer_attempts_to_start_charging_session_on_charging_point(String chargingPointId) {
+        lastError = null;
+        try {
+            the_customer_starts_charging_session_on_charging_point(chargingPointId);
+        } catch (AssertionError | RuntimeException e) {
+            lastError = e;
+        }
     }
 
     @Then("a new charging session is created and is ACTIVE")
@@ -801,21 +1255,13 @@ public class StepDefinitions {
         ChargingPoint cp = chargingPointManager.readChargingPoint(s.chargingPointId());
         assertNotNull(cp);
 
-        Location loc = locationManager.readLocation(cp.locationId());
-        assertNotNull(loc);
-        assertNotNull(loc.tariff());
+        double pricePerKwh = s.pricePerKwh();
+        double parkingPerMinute = s.pricePerMinute();
 
-        Tariff t = loc.tariff();
-
-        // new tariff meaning:
-        // kWhAC/kWhDC = kWh per hour (speed)
-        // minAC/minDC = price per minute
-        double kWhPerHour = (cp.type() == ChargingType.AC) ? t.pricePerKwhAC() : t.pricePerKwhDC();
-        double pricePerMinute = (cp.type() == ChargingType.AC) ? t.pricePerMinuteAC() : t.pricePerMinuteDC();
-
+        double powerKw = (cp.type() == ChargingType.AC) ? 11.0 : 50.0;
         double hours = minutes / 60.0;
-        double energy = kWhPerHour * hours;
-        double cost = minutes * pricePerMinute;
+        double energy = powerKw * hours;
+        double cost = energy * pricePerKwh + minutes * parkingPerMinute;
 
         // "simulate" end time after X minutes (still deterministic)
         java.util.Date fakeEnd = new java.util.Date(s.startTime().getTime() + minutes * 60_000L);

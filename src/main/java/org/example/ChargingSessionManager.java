@@ -8,7 +8,14 @@ public class ChargingSessionManager {
     private int nextId = 1;
 
     // Create an ACTIVE session (endTime/cost/kWh unknown yet)
-    public void createSession(String id, String customerId, String chargingPointId, Date startTime) {
+    public void createSession(String id,
+                              String customerId,
+                              String chargingPointId,
+                              Date startTime,
+                              String tariffId,
+                              double pricePerKwh,
+                              double pricePerMinute,
+                              String timePeriod) {
         if (sessions.containsKey(id)) {
             throw new IllegalArgumentException("Session already exists: " + id);
         }
@@ -20,7 +27,11 @@ public class ChargingSessionManager {
                 null,
                 0.0,
                 0.0,
-                ChargingSessionStatus.ACTIVE
+                ChargingSessionStatus.ACTIVE,
+                tariffId,
+                pricePerKwh,
+                pricePerMinute,
+                timePeriod
         ));
     }
 
@@ -38,18 +49,46 @@ public class ChargingSessionManager {
                 endTime,
                 kWhCharged,
                 totalCost,
-                ChargingSessionStatus.FINISHED
+                ChargingSessionStatus.FINISHED,
+                s.tariffId(),
+                s.pricePerKwh(),
+                s.pricePerMinute(),
+                s.timePeriod()
         ));
     }
 
     // ✅ auto-generate id (S1, S2, ...) and start time = now
-    public ChargingSession createSessionAutoId(String customerId, String chargingPointId) {
+    public ChargingSession createSessionAutoId(String customerId,
+                                               String chargingPointId,
+                                               String tariffId,
+                                               double pricePerKwh,
+                                               double pricePerMinute,
+                                               String timePeriod) {
         String id;
         do {
             id = "S" + nextId++;
         } while (sessions.containsKey(id));
 
-        createSession(id, customerId, chargingPointId, new Date());
+        createSession(id, customerId, chargingPointId, new Date(), tariffId, pricePerKwh, pricePerMinute, timePeriod);
+        return sessions.get(id);
+    }
+
+    public ChargingSession createSessionAutoIdAtTime(String customerId,
+                                                     String chargingPointId,
+                                                     Date startTime,
+                                                     String tariffId,
+                                                     double pricePerKwh,
+                                                     double pricePerMinute,
+                                                     String timePeriod) {
+        if (startTime == null) {
+            throw new IllegalArgumentException("startTime must not be null");
+        }
+        String id;
+        do {
+            id = "S" + nextId++;
+        } while (sessions.containsKey(id));
+
+        createSession(id, customerId, chargingPointId, startTime, tariffId, pricePerKwh, pricePerMinute, timePeriod);
         return sessions.get(id);
     }
 
@@ -62,20 +101,21 @@ public class ChargingSessionManager {
      * - endTime (e.g. new Date() for "now")
      * - charging point type (AC/DC) to pick the right tariff values
      *
-     * IMPORTANT: This matches your NEW meaning of tariff:
-     *   tariff.pricePerKwhAC/DC = "kW speed" (power)
-     *   tariff.pricePerMinuteAC/DC = "price per minute"
+     * IMPORTANT: Tariff meaning:
+     *   tariff.pricePerKwhAC/DC = price per kWh
+     *   tariff.pricePerMinuteAC/DC = parking price per minute
      */
     public Calculation calculateForSession(
             ChargingSession session,
             Date endTime,
             ChargingType type,
-            Tariff tariff
+            double pricePerKwh,
+            double pricePerMinute
     ) {
         if (session == null) throw new IllegalArgumentException("session must not be null");
         if (endTime == null) throw new IllegalArgumentException("endTime must not be null");
         if (type == null) throw new IllegalArgumentException("type must not be null");
-        if (tariff == null) throw new IllegalArgumentException("tariff must not be null");
+        if (pricePerKwh < 0 || pricePerMinute < 0) throw new IllegalArgumentException("prices must not be negative");
 
         if (session.startTime() == null) {
             throw new IllegalArgumentException("session.startTime must not be null");
@@ -84,15 +124,11 @@ public class ChargingSessionManager {
         long minutes = (endTime.getTime() - session.startTime().getTime()) / 60000;
         if (minutes < 0) minutes = 0;
 
-        // tariff fields interpreted as:
-        // powerKw = pricePerKwhAC/DC
-        // pricePerMin = pricePerMinuteAC/DC
-        double powerKw = (type == ChargingType.AC) ? tariff.pricePerKwhAC() : tariff.pricePerKwhDC();
-        double pricePerMin = (type == ChargingType.AC) ? tariff.pricePerMinuteAC() : tariff.pricePerMinuteDC();
+        double powerKw = (type == ChargingType.AC) ? 11.0 : 50.0;
 
         double hours = minutes / 60.0;
         double kWh = powerKw * hours;
-        double cost = minutes * pricePerMin;
+        double cost = (kWh * pricePerKwh) + (minutes * pricePerMinute);
 
         return new Calculation(minutes, kWh, cost);
     }
@@ -106,8 +142,7 @@ public class ChargingSessionManager {
      */
     public ChargingSession finishSessionAutoCalculated(
             String sessionId,
-            ChargingType chargingPointType,
-            Tariff tariff
+            ChargingType chargingPointType
     ) {
         ChargingSession s = sessions.get(sessionId);
         if (s == null) {
@@ -118,7 +153,7 @@ public class ChargingSessionManager {
         }
 
         Date now = new Date();
-        Calculation calc = calculateForSession(s, now, chargingPointType, tariff);
+        Calculation calc = calculateForSession(s, now, chargingPointType, s.pricePerKwh(), s.pricePerMinute());
 
         endSession(sessionId, now, calc.kWhCharged(), calc.totalCost());
         return sessions.get(sessionId);
@@ -128,7 +163,11 @@ public class ChargingSessionManager {
     public void createFinishedSession(String id, String customerId, String chargingPointId,
                                       Date startTime, Date endTime,
                                       double kWhCharged, double totalCost,
-                                      ChargingSessionStatus status) {
+                                      ChargingSessionStatus status,
+                                      String tariffId,
+                                      double pricePerKwh,
+                                      double pricePerMinute,
+                                      String timePeriod) {
 
         if (sessions.containsKey(id)) {
             throw new IllegalArgumentException("Session already exists: " + id);
@@ -142,7 +181,11 @@ public class ChargingSessionManager {
                 endTime,
                 kWhCharged,
                 totalCost,
-                status
+                status,
+                tariffId,
+                pricePerKwh,
+                pricePerMinute,
+                timePeriod
         ));
     }
 
@@ -152,5 +195,12 @@ public class ChargingSessionManager {
 
     public List<ChargingSession> readAllSessions() {
         return new ArrayList<>(sessions.values());
+    }
+
+    public void deleteSessionsByCustomer(String customerId) {
+        if (customerId == null || customerId.isBlank()) {
+            throw new IllegalArgumentException("customerId must not be empty");
+        }
+        sessions.values().removeIf(session -> customerId.equals(session.customerId()));
     }
 }

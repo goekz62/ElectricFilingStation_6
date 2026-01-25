@@ -59,6 +59,7 @@ public class StepDefinitions {
         return priceCheckTime == null ? new Date() : priceCheckTime;
     }
 
+
     // =========================================================
     // Common Setup
     // =========================================================

@@ -5,7 +5,9 @@ public record ChargingPoint(
         String locationId,
         ChargingType type,
         ChargingPointStatus status
-) {
+)
+
+{
     @Override
     public String toString() {
         return "ChargingPoint{id='%s', locationId='%s', type=%s, status=%s}"

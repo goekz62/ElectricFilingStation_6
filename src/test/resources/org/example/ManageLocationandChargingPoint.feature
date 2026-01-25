@@ -56,6 +56,7 @@ Feature: EPIC 1 - Manage Locations and Charging Points
       | id  | type | status   |
       | CP1 | DC   | OCCUPIED |
 
+
   Scenario: Delete a charging point
     Given a location exists with id "L1", name "Vienna Center", address "Stephansplatz 1"
     And the operator adds a charging point with id "CP1" and type "AC" and status "AVAILABLE" to location "L1"

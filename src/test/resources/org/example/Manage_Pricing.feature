@@ -34,6 +34,7 @@ Feature: EPIC 2 - Manage Pricing
       | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
       | 0.22  | 0.18  | 0.10  | 0.02  | DAY        | 06:00     | 18:00   |
 
+
   Scenario: Define tariffs for multiple locations
     When the operator defines a tariff for location "L1" with:
       | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |

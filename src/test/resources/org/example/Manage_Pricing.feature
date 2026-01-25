@@ -20,6 +20,39 @@ Feature: EPIC 2 - Manage Pricing
       | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
       | 0.20  | 0.30  | 0.09  | 0.12  | DAY        | 06:00     | 18:00   |
 
+  Scenario: Define at least 5 different tariffs with different time periods for one location
+    When the operator defines a tariff for location "L1" with:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.20  | 0.30  | 0.09  | 0.12  | P1         | 00:00     | 04:00   |
+    And the operator defines a tariff for location "L1" with:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.21  | 0.31  | 0.10  | 0.13  | P2         | 04:00     | 08:00   |
+    And the operator defines a tariff for location "L1" with:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.22  | 0.32  | 0.11  | 0.14  | P3         | 08:00     | 12:00   |
+    And the operator defines a tariff for location "L1" with:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.23  | 0.33  | 0.12  | 0.15  | P4         | 12:00     | 16:00   |
+    And the operator defines a tariff for location "L1" with:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.24  | 0.34  | 0.13  | 0.16  | P5         | 16:00     | 20:00   |
+    Then location "L1" has tariff:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.20  | 0.30  | 0.09  | 0.12  | P1         | 00:00     | 04:00   |
+    And location "L1" has tariff:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.21  | 0.31  | 0.10  | 0.13  | P2         | 04:00     | 08:00   |
+    And location "L1" has tariff:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.22  | 0.32  | 0.11  | 0.14  | P3         | 08:00     | 12:00   |
+    And location "L1" has tariff:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.23  | 0.33  | 0.12  | 0.15  | P4         | 12:00     | 16:00   |
+    And location "L1" has tariff:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.24  | 0.34  | 0.13  | 0.16  | P5         | 16:00     | 20:00   |
+
+
   # =========================
   # US-7 Update prices
   # =========================

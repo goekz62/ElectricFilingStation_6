@@ -23,7 +23,7 @@ public class StepDefinitions {
     private List<Location> lastLocations;
     private List<ChargingPoint> lastChargingPoints;
     private List<ChargingPoint> lastFilteredChargingPoints;
-    private Exception lastError;
+    private Throwable lastError;
 
     private CustomerManager customerManager;
     private Customer createdCustomer;

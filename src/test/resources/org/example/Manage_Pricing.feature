@@ -13,25 +13,43 @@ Feature: EPIC 2 - Manage Pricing
   # US-6 Define prices
   # =========================
   Scenario: Define AC and DC prices for a location
-    Given a location exists with id "L1", name "Vienna Center", address "Stephansplatz 1"
     When the operator defines a tariff for location "L1" with:
-      | kWhAC | kWhDC | minAC | minDC |
-      | 20    | 15    | 0.09  | 0.01  |
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.20  | 0.30  | 0.09  | 0.12  | DAY        | 06:00     | 18:00   |
     Then location "L1" has tariff:
-      | kWhAC | kWhDC | minAC | minDC |
-      | 20    | 15    | 0.09  | 0.01  |
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.20  | 0.30  | 0.09  | 0.12  | DAY        | 06:00     | 18:00   |
 
   # =========================
   # US-7 Update prices
   # =========================
   Scenario: Update pricing information for a location
-    Given a location exists with id "L1", name "Vienna Center", address "Stephansplatz 1"
     And the operator defines a tariff for location "L1" with:
-      | kWhAC | kWhDC | minAC | minDC |
-      | 20    | 15    | 0.09  | 0.01  |
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.20  | 0.30  | 0.09  | 0.12  | DAY        | 06:00     | 18:00   |
     When the operator updates the tariff for location "L1" to:
-      | kWhAC | kWhDC | minAC | minDC |
-      | 22    | 18    | 0.10  | 0.02  |
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.22  | 0.32  | 0.10  | 0.14  | DAY        | 06:00     | 18:00   |
     Then location "L1" has tariff:
-      | kWhAC | kWhDC | minAC | minDC |
-      | 22    | 18    | 0.10  | 0.02  |
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.22  | 0.32  | 0.10  | 0.14  | DAY        | 06:00     | 18:00   |
+
+  Scenario: Define tariffs for multiple locations
+    When the operator defines a tariff for location "L1" with:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.20  | 0.30  | 0.09  | 0.12  | DAY        | 06:00     | 18:00   |
+    And the operator defines a tariff for location "L2" with:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.25  | 0.35  | 0.10  | 0.15  | NIGHT      | 18:00     | 06:00   |
+    Then location "L1" has tariff:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.20  | 0.30  | 0.09  | 0.12  | DAY        | 06:00     | 18:00   |
+    And location "L2" has tariff:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.25  | 0.35  | 0.10  | 0.15  | NIGHT      | 18:00     | 06:00   |
+
+  Scenario: Prevent defining tariffs for an unknown location
+    When the operator defines a tariff for location "L99" with:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod | startTime | endTime |
+      | 0.20  | 0.30  | 0.09  | 0.12  | DAY        | 06:00     | 18:00   |
+    Then the system shows an error containing "Location not found"

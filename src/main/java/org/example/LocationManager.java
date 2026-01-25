@@ -12,6 +12,28 @@ public class LocationManager {
         locations.put(id, new Location(id, name, address)); // tariff = null initially
     }
 
+    public void updateLocation(String id, String name, String address) {
+        Location existing = locations.get(id);
+        if (existing == null) {
+            throw new IllegalArgumentException("Location not found: " + id);
+        }
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Location name must not be empty");
+        }
+        if (address == null || address.isBlank()) {
+            throw new IllegalArgumentException("Location address must not be empty");
+        }
+        Location updated = new Location(id, name, address, existing.tariff());
+        locations.put(id, updated);
+    }
+
+    public void deleteLocation(String id) {
+        if (!locations.containsKey(id)) {
+            throw new IllegalArgumentException("Location not found: " + id);
+        }
+        locations.remove(id);
+    }
+
     public Location readLocation(String id) {
         return locations.get(id);
     }
@@ -26,13 +48,25 @@ public class LocationManager {
                              double pricePerKwhDC,
                              double pricePerMinuteAC,
                              double pricePerMinuteDC) {
+        defineTariff(locationId, pricePerKwhAC, pricePerKwhDC, pricePerMinuteAC, pricePerMinuteDC, "ALL_DAY");
+    }
+
+    public void defineTariff(String locationId,
+                             double pricePerKwhAC,
+                             double pricePerKwhDC,
+                             double pricePerMinuteAC,
+                             double pricePerMinuteDC,
+                             String timePeriod) {
 
         Location loc = locations.get(locationId);
         if (loc == null) {
             throw new IllegalArgumentException("Location not found: " + locationId);
         }
+        if (timePeriod == null || timePeriod.isBlank()) {
+            throw new IllegalArgumentException("timePeriod must not be empty");
+        }
 
-        Tariff tariff = new Tariff("T-" + locationId, pricePerKwhAC, pricePerKwhDC, pricePerMinuteAC, pricePerMinuteDC);
+        Tariff tariff = new Tariff("T-" + locationId, pricePerKwhAC, pricePerKwhDC, pricePerMinuteAC, pricePerMinuteDC, timePeriod);
 
         // record is immutable -> replace with updated copy
         Location updated = new Location(loc.id(), loc.name(), loc.address(), tariff);
@@ -43,6 +77,15 @@ public class LocationManager {
                              double pricePerKwhDC,
                              double pricePerMinuteAC,
                              double pricePerMinuteDC) {
+        updateTariff(locationId, pricePerKwhAC, pricePerKwhDC, pricePerMinuteAC, pricePerMinuteDC, null);
+    }
+
+    public void updateTariff(String locationId,
+                             double pricePerKwhAC,
+                             double pricePerKwhDC,
+                             double pricePerMinuteAC,
+                             double pricePerMinuteDC,
+                             String timePeriod) {
 
         Location loc = locations.get(locationId);
         if (loc == null) {
@@ -50,6 +93,9 @@ public class LocationManager {
         }
         if (loc.tariff() == null) {
             throw new IllegalArgumentException("No tariff defined for location: " + locationId);
+        }
+        if (timePeriod != null && timePeriod.isBlank()) {
+            throw new IllegalArgumentException("timePeriod must not be empty");
         }
 
         // keep same tariffId, only update prices
@@ -59,7 +105,8 @@ public class LocationManager {
                 pricePerKwhAC,
                 pricePerKwhDC,
                 pricePerMinuteAC,
-                pricePerMinuteDC
+                pricePerMinuteDC,
+                timePeriod == null ? old.timePeriod() : timePeriod
         );
 
         Location updatedLocation = new Location(loc.id(), loc.name(), loc.address(), updatedTariff);

@@ -29,16 +29,52 @@ Feature: EPIC 3 - Network Monitoring
       | L1 | Vienna Center | Stephansplatz 1 |
       | L2 | Graz East     | Hauptstrasse 5  |
     And the operator defines a tariff for location "L1" with:
-      | kWhAC | kWhDC | minAC | minDC |
-      | 20    | 15    | 0.09  | 0.01  |
+      | kWhAC | kWhDC | minAC | minDC | timePeriod |
+      | 0.20  | 0.15  | 0.09  | 0.01  | DAY        |
     And the operator defines a tariff for location "L2" with:
-      | kWhAC | kWhDC | minAC | minDC |
-      | 25    | 18    | 0.10  | 0.02  |
+      | kWhAC | kWhDC | minAC | minDC | timePeriod |
+      | 0.25  | 0.18  | 0.10  | 0.02  | NIGHT      |
     When the operator requests current prices for all locations
     Then the system returns current prices for 2 locations
     And location "L1" current price is
-      | kWhAC | kWhDC | minAC | minDC |
-      | 20    | 15    | 0.09  | 0.01  |
+      | kWhAC | kWhDC | minAC | minDC | timePeriod |
+      | 0.20  | 0.15  | 0.09  | 0.01  | DAY        |
     And location "L2" current price is
-      | kWhAC | kWhDC | minAC | minDC |
-      | 25    | 18    | 0.10  | 0.02  |
+      | kWhAC | kWhDC | minAC | minDC | timePeriod |
+      | 0.25  | 0.18  | 0.10  | 0.02  | NIGHT      |
+
+  # ------------------------------------------------------------
+  # Edge case - no available charging points
+  # ------------------------------------------------------------
+  Scenario: View available charging points when none are available
+    Given the network has charging points
+      | id  | locationId | type | status       |
+      | CP1 | L1         | AC   | OCCUPIED     |
+      | CP2 | L1         | DC   | OUT_OF_ORDER |
+    When the operator requests all available charging points
+    Then the system returns 0 available charging points
+
+  # ------------------------------------------------------------
+  # US-10 - Filter charging points
+  # ------------------------------------------------------------
+  Scenario: Filter charging points by location, type, and price
+    Given the network has locations
+      | id | name          | address         |
+      | L1 | Vienna Center | Stephansplatz 1 |
+      | L2 | Graz East     | Hauptstrasse 5  |
+    And the network has charging points
+      | id  | locationId | type | status    |
+      | CP1 | L1         | AC   | AVAILABLE |
+      | CP2 | L1         | DC   | AVAILABLE |
+      | CP3 | L2         | AC   | AVAILABLE |
+    And the operator defines a tariff for location "L1" with:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod |
+      | 0.20  | 0.45  | 0.09  | 0.01  | DAY        |
+    And the operator defines a tariff for location "L2" with:
+      | kWhAC | kWhDC | minAC | minDC | timePeriod |
+      | 0.30  | 0.50  | 0.10  | 0.02  | DAY        |
+    When the operator filters charging points at location "L1" with type "AC" and max price 0.25
+    Then the system returns 1 filtered charging points
+    And the filtered charging points include
+      | id  |
+      | CP1 |

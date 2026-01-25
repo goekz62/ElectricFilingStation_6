@@ -31,3 +31,20 @@ Feature: EPIC 4 - Track Sessions and Billing
     When the operator requests billing history for that customer
     Then the system returns 2 top-ups and 1 invoices
     And invoice "I1" includes session "S1" on charging point "CP1" with total cost 7.80
+
+  # ------------------------------------------------------------
+  # Edge case - customer without billing history
+  # ------------------------------------------------------------
+  Scenario: view empty billing history for a customer
+    Given a customer exists with id "C2"
+    When the operator requests billing history for that customer
+    Then the system returns 0 top-ups and 0 invoices
+
+  # ------------------------------------------------------------
+  # US-13 - Manually correct customer balance
+  # ------------------------------------------------------------
+  Scenario: manually correct customer balance
+    Given a customer exists with id "C3"
+    When the operator corrects the customer balance by 5.00 with reason "manual correction"
+    Then the customer balance is 5.00
+    And the system returns 1 balance adjustments

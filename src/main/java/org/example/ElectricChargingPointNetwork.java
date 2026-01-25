@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import java.util.Scanner;
 
@@ -41,20 +42,18 @@ public class ElectricChargingPointNetwork {
         locationManager.createLocation("L8", "St. Pölten Zentrum", "Rathausplatz 1");
         locationManager.createLocation("L9", "Wels Nord", "Bahnhofstrasse 9");
         locationManager.createLocation("L10", "Bregenz Hafen", "Seestrasse 4");
-        locationManager.createLocation("L11", "Villach Ost", "Italiener Strasse 15");
-        locationManager.createLocation("L12", "Leoben City", "Hauptplatz 6");
-        locationManager.createLocation("L13", "Krems Altstadt", "Obere Landstrasse 22");
 
 
-        locationManager.defineTariff("L1", 20, 15, 0.09, 0.01);        locationManager.defineTariff("L2", 11, 50, 0.06, 0.25);   // City AC slow / DC fast
-        locationManager.defineTariff("L3", 22, 75, 0.08, 0.30);   // Shopping center
-        locationManager.defineTariff("L4", 11, 100, 0.07, 0.35);  // Highway charger
-        locationManager.defineTariff("L5", 22, 150, 0.09, 0.45);  // Fast DC hub
-        locationManager.defineTariff("L6", 7.4, 50, 0.05, 0.22);  // Residential area
-        locationManager.defineTariff("L7", 11, 75, 0.06, 0.28);   // Office parking
-        locationManager.defineTariff("L8", 22, 120, 0.08, 0.40);  // Premium location
-        locationManager.defineTariff("L9", 11, 60, 0.06, 0.26);   // Regional charger
-        locationManager.defineTariff("L10", 22, 180, 0.10, 0.55); // Ultra-fast DC
+        locationManager.defineTariff("L1", 0.20, 0.15, 0.09, 0.01, "DAY");
+        locationManager.defineTariff("L2", 0.11, 0.50, 0.06, 0.25, "NIGHT");
+        locationManager.defineTariff("L3", 0.22, 0.75, 0.08, 0.30, "PEAK");
+        locationManager.defineTariff("L4", 0.11, 1.00, 0.07, 0.35, "OFF_PEAK");
+        locationManager.defineTariff("L5", 0.22, 1.50, 0.09, 0.45, "WEEKEND");
+        locationManager.defineTariff("L6", 0.07, 0.50, 0.05, 0.22, "EVENING");
+        locationManager.defineTariff("L7", 0.11, 0.75, 0.06, 0.28, "MORNING");
+        locationManager.defineTariff("L8", 0.22, 1.20, 0.08, 0.40, "DAY");
+        locationManager.defineTariff("L9", 0.11, 0.60, 0.06, 0.26, "NIGHT");
+        locationManager.defineTariff("L10", 0.22, 1.80, 0.10, 0.55, "PEAK");
 
 
         chargingPointManager.createChargingPoint("CP1", "L1", ChargingType.AC, ChargingPointStatus.AVAILABLE);
@@ -62,27 +61,28 @@ public class ElectricChargingPointNetwork {
         chargingPointManager.createChargingPoint("CP3", "L2", ChargingType.DC, ChargingPointStatus.OUT_OF_ORDER);
         chargingPointManager.createChargingPoint("CP4", "L2", ChargingType.AC, ChargingPointStatus.AVAILABLE);
         chargingPointManager.createChargingPoint("CP5", "L3", ChargingType.DC, ChargingPointStatus.AVAILABLE);
-        chargingPointManager.createChargingPoint("CP6", "L4", ChargingType.AC, ChargingPointStatus.AVAILABLE);
-        chargingPointManager.createChargingPoint("CP7", "L5", ChargingType.DC, ChargingPointStatus.OCCUPIED);
-        chargingPointManager.createChargingPoint("CP8", "L6", ChargingType.AC, ChargingPointStatus.AVAILABLE);
-        chargingPointManager.createChargingPoint("CP9", "L7", ChargingType.DC, ChargingPointStatus.OUT_OF_ORDER);
-        chargingPointManager.createChargingPoint("CP10", "L8", ChargingType.AC, ChargingPointStatus.AVAILABLE);
-        chargingPointManager.createChargingPoint("CP11", "L9", ChargingType.DC, ChargingPointStatus.AVAILABLE);
-        chargingPointManager.createChargingPoint("CP12", "L10", ChargingType.AC, ChargingPointStatus.OCCUPIED);
-        chargingPointManager.createChargingPoint("CP13", "L11", ChargingType.DC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP6", "L3", ChargingType.AC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP7", "L4", ChargingType.AC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP8", "L4", ChargingType.DC, ChargingPointStatus.OCCUPIED);
+        chargingPointManager.createChargingPoint("CP9", "L5", ChargingType.DC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP10", "L5", ChargingType.AC, ChargingPointStatus.OUT_OF_ORDER);
+        chargingPointManager.createChargingPoint("CP11", "L6", ChargingType.AC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP12", "L6", ChargingType.DC, ChargingPointStatus.OCCUPIED);
+        chargingPointManager.createChargingPoint("CP13", "L7", ChargingType.DC, ChargingPointStatus.OUT_OF_ORDER);
+        chargingPointManager.createChargingPoint("CP14", "L7", ChargingType.AC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP15", "L8", ChargingType.AC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP16", "L8", ChargingType.DC, ChargingPointStatus.OCCUPIED);
+        chargingPointManager.createChargingPoint("CP17", "L9", ChargingType.DC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP18", "L9", ChargingType.AC, ChargingPointStatus.AVAILABLE);
+        chargingPointManager.createChargingPoint("CP19", "L10", ChargingType.AC, ChargingPointStatus.OCCUPIED);
+        chargingPointManager.createChargingPoint("CP20", "L10", ChargingType.DC, ChargingPointStatus.AVAILABLE);
 
-        // create customers (auto id: C1, C2, C3)
+        // create customers (auto id: C1..C5)
         Customer c1 = customerManager.createCustomer("Judith", "Muellner");
         customerManager.createCustomer("Katharina", "Weinberger");
         customerManager.createCustomer("Franz", "Steininger");
         customerManager.createCustomer("Nisa", "Yesillik");
         customerManager.createCustomer("Lukas", "Huber");
-        customerManager.createCustomer("Anna", "Mayer");
-        customerManager.createCustomer("Paul", "Gruber");
-        customerManager.createCustomer("Sophie", "Wagner");
-        customerManager.createCustomer("David", "Fischer");
-        customerManager.createCustomer("Laura", "Bauer");
-        customerManager.createCustomer("Max", "Schneider");
 
 
         // demo session
@@ -102,7 +102,7 @@ public class ElectricChargingPointNetwork {
         invoiceManager.addTopUp("T1", c1.id(), 20.00, parseIsoDateTime("2026-01-17T09:00"));
         invoiceManager.addTopUp("T2", c1.id(), 15.00, parseIsoDateTime("2026-01-17T09:30"));
         ChargingSession s1 = chargingSessionManager.readSession("S1");
-        invoiceManager.addInvoice("I1", c1.id(), s1, parseIsoDateTime("2026-01-17T10:30"), InvoiceStatus.PAID);
+        invoiceManager.addInvoice("I1", c1.id(), List.of(s1), parseIsoDateTime("2026-01-17T10:30"), InvoiceStatus.PAID);
 
         Scanner scanner = new Scanner(System.in);
 
@@ -156,9 +156,16 @@ public class ElectricChargingPointNetwork {
                 show billing <customerId>   (US-12)
                 
                 create location <id> <name_with_underscores> <address_with_underscores>
+                update location <id> <name_with_underscores> <address_with_underscores>
+                delete location <id>
                 create charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
-                define tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>
-                update tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>
+                update charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
+                delete charging point <id>
+                update charging point status <id> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>
+                define tariff <locationId> <kWhAC> <kWhDC> <parkingMinAC> <parkingMinDC> [timePeriod]
+                update tariff <locationId> <kWhAC> <kWhDC> <parkingMinAC> <parkingMinDC> [timePeriod]
+                filter charging points <locationId|*> <AC|DC|*> <AVAILABLE|OCCUPIED|OUT_OF_ORDER|*> <maxPricePerKwh|*>
+                correct balance <customerId> <amount> <reason_with_underscores>
                 back
                 """);
 
@@ -233,10 +240,23 @@ public class ElectricChargingPointNetwork {
                 if (topUps.isEmpty()) System.out.println("  (none)");
                 else topUps.forEach(t -> System.out.println("  " + t));
 
+                System.out.println("\nBalance Adjustments:");
+                var adjustments = invoiceManager.readBalanceAdjustments(customerId);
+                if (adjustments.isEmpty()) System.out.println("  (none)");
+                else adjustments.forEach(a -> System.out.println("  " + a));
+
                 System.out.println("\nInvoices:");
                 var invoices = invoiceManager.readInvoices(customerId);
-                if (invoices.isEmpty()) System.out.println("  (none)");
-                else invoices.forEach(inv -> System.out.println("  " + inv));
+                if (invoices.isEmpty()) {
+                    System.out.println("  (none)");
+                } else {
+                    for (Invoice inv : invoices) {
+                        System.out.println("  " + inv);
+                        for (ChargingSession session : inv.sessions()) {
+                            System.out.println("    " + session);
+                        }
+                    }
+                }
 
                 System.out.println("\nBalance: " + money(invoiceManager.readBalance(customerId)));
                 continue;
@@ -252,6 +272,36 @@ public class ElectricChargingPointNetwork {
                 try {
                     locationManager.createLocation(parts[2], parts[3].replace("_", " "), parts[4].replace("_", " "));
                     System.out.println("Location created.");
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Error: " + e.getMessage());
+                }
+                continue;
+            }
+
+            if (input.toLowerCase(Locale.ROOT).startsWith("update location")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 5) {
+                    System.out.println("Usage: update location <id> <name_with_underscores> <address_with_underscores>");
+                    continue;
+                }
+                try {
+                    locationManager.updateLocation(parts[2], parts[3].replace("_", " "), parts[4].replace("_", " "));
+                    System.out.println("Location updated.");
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Error: " + e.getMessage());
+                }
+                continue;
+            }
+
+            if (input.toLowerCase(Locale.ROOT).startsWith("delete location")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 3) {
+                    System.out.println("Usage: delete location <id>");
+                    continue;
+                }
+                try {
+                    locationManager.deleteLocation(parts[2]);
+                    System.out.println("Location deleted.");
                 } catch (IllegalArgumentException e) {
                     System.out.println("Error: " + e.getMessage());
                 }
@@ -280,19 +330,74 @@ public class ElectricChargingPointNetwork {
                 continue;
             }
 
-            if (input.toLowerCase(Locale.ROOT).startsWith("define tariff")) {
+            if (input.toLowerCase(Locale.ROOT).startsWith("update charging point status")) {
                 String[] parts = input.split("\\s+");
-                if (parts.length < 7) {
-                    System.out.println("Usage: define tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>");
+                if (parts.length < 5) {
+                    System.out.println("Usage: update charging point status <id> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>");
                     continue;
                 }
                 try {
+                    chargingPointManager.updateStatus(
+                            parts[3],
+                            ChargingPointStatus.valueOf(parts[4].toUpperCase(Locale.ROOT))
+                    );
+                    System.out.println("Charging point status updated.");
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Error: " + e.getMessage());
+                }
+                continue;
+            }
+
+            if (input.toLowerCase(Locale.ROOT).startsWith("update charging point")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 7) {
+                    System.out.println("Usage: update charging point <id> <locationId> <AC|DC> <AVAILABLE|OCCUPIED|OUT_OF_ORDER>");
+                    continue;
+                }
+                try {
+                    chargingPointManager.updateChargingPoint(
+                            parts[3],
+                            parts[4],
+                            ChargingType.valueOf(parts[5].toUpperCase(Locale.ROOT)),
+                            ChargingPointStatus.valueOf(parts[6].toUpperCase(Locale.ROOT))
+                    );
+                    System.out.println("Charging point updated.");
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Error: " + e.getMessage());
+                }
+                continue;
+            }
+
+            if (input.toLowerCase(Locale.ROOT).startsWith("delete charging point")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 4) {
+                    System.out.println("Usage: delete charging point <id>");
+                    continue;
+                }
+                try {
+                    chargingPointManager.deleteChargingPoint(parts[3]);
+                    System.out.println("Charging point deleted.");
+                } catch (IllegalArgumentException e) {
+                    System.out.println("Error: " + e.getMessage());
+                }
+                continue;
+            }
+
+            if (input.toLowerCase(Locale.ROOT).startsWith("define tariff")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 7) {
+                    System.out.println("Usage: define tariff <locationId> <kWhAC> <kWhDC> <parkingMinAC> <parkingMinDC> [timePeriod]");
+                    continue;
+                }
+                try {
+                    String timePeriod = parts.length >= 8 ? parts[7] : "ALL_DAY";
                     locationManager.defineTariff(
                             parts[2],
                             Double.parseDouble(parts[3]),
                             Double.parseDouble(parts[4]),
                             Double.parseDouble(parts[5]),
-                            Double.parseDouble(parts[6])
+                            Double.parseDouble(parts[6]),
+                            timePeriod
                     );
                     System.out.println("Tariff defined for location " + parts[2] + ".");
                 } catch (Exception e) {
@@ -304,18 +409,65 @@ public class ElectricChargingPointNetwork {
             if (input.toLowerCase(Locale.ROOT).startsWith("update tariff")) {
                 String[] parts = input.split("\\s+");
                 if (parts.length < 7) {
-                    System.out.println("Usage: update tariff <locationId> <kWhAC> <kWhDC> <minAC> <minDC>");
+                    System.out.println("Usage: update tariff <locationId> <kWhAC> <kWhDC> <parkingMinAC> <parkingMinDC> [timePeriod]");
                     continue;
                 }
                 try {
+                    String timePeriod = parts.length >= 8 ? parts[7] : null;
                     locationManager.updateTariff(
                             parts[2],
                             Double.parseDouble(parts[3]),
                             Double.parseDouble(parts[4]),
                             Double.parseDouble(parts[5]),
-                            Double.parseDouble(parts[6])
+                            Double.parseDouble(parts[6]),
+                            timePeriod
                     );
                     System.out.println("Tariff updated for location " + parts[2] + ".");
+                } catch (Exception e) {
+                    System.out.println("Error: " + e.getMessage());
+                }
+                continue;
+            }
+
+            if (input.toLowerCase(Locale.ROOT).startsWith("filter charging points")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 6) {
+                    System.out.println("Usage: filter charging points <locationId|*> <AC|DC|*> <AVAILABLE|OCCUPIED|OUT_OF_ORDER|*> <maxPricePerKwh|*>");
+                    continue;
+                }
+                String locationId = parts[3].equals("*") ? null : parts[3];
+                ChargingType type = parts[4].equals("*") ? null : ChargingType.valueOf(parts[4].toUpperCase(Locale.ROOT));
+                ChargingPointStatus status = parts[5].equals("*") ? null : ChargingPointStatus.valueOf(parts[5].toUpperCase(Locale.ROOT));
+                Double maxPrice = null;
+                if (parts.length >= 7 && !parts[6].equals("*")) {
+                    maxPrice = Double.parseDouble(parts[6]);
+                }
+                var filtered = chargingPointManager.filterChargingPoints(locationManager, locationId, type, status, maxPrice);
+                if (filtered.isEmpty()) {
+                    System.out.println("(no charging points found)");
+                } else {
+                    filtered.forEach(System.out::println);
+                }
+                continue;
+            }
+
+            if (input.toLowerCase(Locale.ROOT).startsWith("correct balance")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 5) {
+                    System.out.println("Usage: correct balance <customerId> <amount> <reason_with_underscores>");
+                    continue;
+                }
+                try {
+                    String adjustmentId = "ADJ" + System.currentTimeMillis();
+                    String reason = parts[4].replace("_", " ");
+                    invoiceManager.addBalanceAdjustment(
+                            adjustmentId,
+                            parts[2],
+                            Double.parseDouble(parts[3]),
+                            new Date(),
+                            reason
+                    );
+                    System.out.println("Balance corrected for customer " + parts[2] + ".");
                 } catch (Exception e) {
                     System.out.println("Error: " + e.getMessage());
                 }
@@ -346,12 +498,14 @@ public class ElectricChargingPointNetwork {
                 show locations
                 show charging points
                 show prices <locationId>
+                filter charging points <locationId|*> <AC|DC|*> <AVAILABLE|OCCUPIED|OUT_OF_ORDER|*> <maxPricePerKwh|*>
                 topup <amount>
                 show balance
                 show invoices
                 start charging session <chargingPointId>
                 stop charging session <sessionId>
                 show session
+                delete account
                 back
                 """);
 
@@ -403,6 +557,20 @@ public class ElectricChargingPointNetwork {
                 continue;
             }
 
+            if (input.equalsIgnoreCase("delete account")) {
+                if (loggedInCustomer == null) {
+                    System.out.println("Please login first.");
+                    continue;
+                }
+                String customerId = loggedInCustomer.id();
+                customerManager.deleteCustomer(customerId);
+                chargingSessionManager.deleteSessionsByCustomer(customerId);
+                invoiceManager.deleteCustomerData(customerId);
+                loggedInCustomer = null;
+                System.out.println("Account deleted.");
+                continue;
+            }
+
             if (input.equalsIgnoreCase("show locations")) {
                 locationManager.readAllLocations().forEach(System.out::println);
                 continue;
@@ -410,6 +578,28 @@ public class ElectricChargingPointNetwork {
 
             if (input.equalsIgnoreCase("show charging points")) {
                 chargingPointManager.readAllChargingPoints().forEach(System.out::println);
+                continue;
+            }
+
+            if (input.toLowerCase(Locale.ROOT).startsWith("filter charging points")) {
+                String[] parts = input.split("\\s+");
+                if (parts.length < 6) {
+                    System.out.println("Usage: filter charging points <locationId|*> <AC|DC|*> <AVAILABLE|OCCUPIED|OUT_OF_ORDER|*> <maxPricePerKwh|*>");
+                    continue;
+                }
+                String locationId = parts[3].equals("*") ? null : parts[3];
+                ChargingType type = parts[4].equals("*") ? null : ChargingType.valueOf(parts[4].toUpperCase(Locale.ROOT));
+                ChargingPointStatus status = parts[5].equals("*") ? null : ChargingPointStatus.valueOf(parts[5].toUpperCase(Locale.ROOT));
+                Double maxPrice = null;
+                if (parts.length >= 7 && !parts[6].equals("*")) {
+                    maxPrice = Double.parseDouble(parts[6]);
+                }
+                var filtered = chargingPointManager.filterChargingPoints(locationManager, locationId, type, status, maxPrice);
+                if (filtered.isEmpty()) {
+                    System.out.println("(no charging points found)");
+                } else {
+                    filtered.forEach(System.out::println);
+                }
                 continue;
             }
 
@@ -486,46 +676,94 @@ public class ElectricChargingPointNetwork {
                 if (invoices.isEmpty()) {
                     System.out.println("(no invoices)");
                 } else {
-
-                    // sort by session start time
-                    invoices.sort(java.util.Comparator.comparing(i -> i.session().startTime()));
-
+                    invoices.sort(java.util.Comparator.comparing(inv -> inv.sessions().stream()
+                            .map(ChargingSession::startTime)
+                            .filter(java.util.Objects::nonNull)
+                            .min(Date::compareTo)
+                            .orElse(new Date(0))));
                     int itemNo = 1;
                     for (Invoice inv : invoices) {
-
-                        ChargingSession s = inv.session();
-                        ChargingPoint cp = chargingPointManager.readChargingPoint(s.chargingPointId());
-
-                        String locationName = "UNKNOWN";
-                        String mode = "UNKNOWN";
-
-                        if (cp != null) {
-                            mode = cp.type().name(); // AC / DC
-                            Location loc = locationManager.readLocation(cp.locationId());
-                            if (loc != null) {
-                                locationName = loc.name();
-                            }
-                        }
-
-                        long durationMin = 0;
-                        if (s.startTime() != null && s.endTime() != null) {
-                            durationMin = (s.endTime().getTime() - s.startTime().getTime()) / 60000;
-                        }
+                        List<ChargingSession> sessions = new java.util.ArrayList<>(inv.sessions());
+                        sessions.sort(java.util.Comparator.comparing(ChargingSession::startTime));
 
                         System.out.printf(
                                 Locale.ROOT,
-                                "%d) invoice=%s | location=%s | cp=%s | mode=%s | duration=%d min | energy=%.2f kWh | price=%.2f | status=%s%n",
+                                "%d) invoice=%s | total=%.2f | status=%s%n",
                                 itemNo++,
                                 inv.id(),
-                                locationName,
-                                s.chargingPointId(),
-                                mode,
-                                durationMin,
-                                s.kWhCharged(),
-                                s.totalCost(),
+                                inv.totalCost(),
                                 inv.status()
                         );
+
+                        int lineNo = 1;
+                        for (ChargingSession s : sessions) {
+                            ChargingPoint cp = chargingPointManager.readChargingPoint(s.chargingPointId());
+
+                            String locationName = "UNKNOWN";
+                            String mode = "UNKNOWN";
+                            Tariff tariff = null;
+
+                            if (cp != null) {
+                                mode = cp.type().name();
+                                Location loc = locationManager.readLocation(cp.locationId());
+                                if (loc != null) {
+                                    locationName = loc.name();
+                                    tariff = loc.tariff();
+                                }
+                            }
+
+                            long durationMin = 0;
+                            if (s.startTime() != null && s.endTime() != null) {
+                                durationMin = (s.endTime().getTime() - s.startTime().getTime()) / 60000;
+                            }
+
+                            double pricePerKwh = 0.0;
+                            double parkingPerMin = 0.0;
+                            if (tariff != null && cp != null) {
+                                pricePerKwh = (cp.type() == ChargingType.AC) ? tariff.pricePerKwhAC() : tariff.pricePerKwhDC();
+                                parkingPerMin = (cp.type() == ChargingType.AC) ? tariff.pricePerMinuteAC() : tariff.pricePerMinuteDC();
+                            }
+
+                            double energyCost = s.kWhCharged() * pricePerKwh;
+                            double parkingCost = durationMin * parkingPerMin;
+
+                            System.out.printf(
+                                    Locale.ROOT,
+                                    "  %d.%d) %s | cp=%s | mode=%s | duration=%d min | energy=%.2f kWh @ %.2f | energyCost=%.2f | parkingCost=%.2f | total=%.2f%n",
+                                    itemNo - 1,
+                                    lineNo++,
+                                    locationName,
+                                    s.chargingPointId(),
+                                    mode,
+                                    durationMin,
+                                    s.kWhCharged(),
+                                    pricePerKwh,
+                                    energyCost,
+                                    parkingCost,
+                                    s.totalCost()
+                            );
+                        }
                     }
+                }
+
+                System.out.println("Top-ups (sorted by time):");
+                var topUps = invoiceManager.readTopUps(loggedInCustomer.id());
+                if (topUps.isEmpty()) {
+                    System.out.println("(no top-ups)");
+                } else {
+                    topUps.stream()
+                            .sorted(java.util.Comparator.comparing(TopUp::dateTime))
+                            .forEach(t -> System.out.println("  " + t));
+                }
+
+                System.out.println("Balance adjustments (sorted by time):");
+                var adjustments = invoiceManager.readBalanceAdjustments(loggedInCustomer.id());
+                if (adjustments.isEmpty()) {
+                    System.out.println("(no adjustments)");
+                } else {
+                    adjustments.stream()
+                            .sorted(java.util.Comparator.comparing(BalanceAdjustment::dateTime))
+                            .forEach(a -> System.out.println("  " + a));
                 }
 
                 System.out.println("Current balance: " + money(invoiceManager.readBalance(loggedInCustomer.id())));
@@ -594,22 +832,24 @@ public class ElectricChargingPointNetwork {
                 // If ACTIVE -> show live values (duration + estimated kWh + estimated cost)
                 if (s.status() == ChargingSessionStatus.ACTIVE) {
                     ChargingPoint cp = chargingPointManager.readChargingPoint(s.chargingPointId());
+                    if (cp == null) {
+                        System.out.println("Live: charging point missing.");
+                        continue;
+                    }
+
                     Location loc = locationManager.readLocation(cp.locationId());
+                    if (loc == null || loc.tariff() == null) {
+                        System.out.println("Live: tariff missing.");
+                        continue;
+                    }
 
-                    long minutes = (new Date().getTime() - s.startTime().getTime()) / 60000;
-
-                    double kw = (cp.type() == ChargingType.AC) ? 11.0 : 50.0; // FIXED POWER
-                    double hours = minutes / 60.0;
-                    double kWh = kw * hours;
-
-                    Tariff t = loc.tariff();
-                    double cost = kWh * (cp.type() == ChargingType.AC ? t.pricePerKwhAC() : t.pricePerKwhDC())
-                            + minutes * (cp.type() == ChargingType.AC ? t.pricePerMinuteAC() : t.pricePerMinuteDC());
+                    ChargingSessionManager.Calculation calc =
+                            chargingSessionManager.calculateForSession(s, new Date(), cp.type(), loc.tariff());
 
                     System.out.println("Live:");
-                    System.out.println("  durationMin=" + minutes);
-                    System.out.println("  estKWh=" + String.format(Locale.ROOT, "%.2f", kWh));
-                    System.out.println("  estCost=" + String.format(Locale.ROOT, "%.2f", cost));
+                    System.out.println("  durationMin=" + calc.durationMinutes());
+                    System.out.println("  estKWh=" + String.format(Locale.ROOT, "%.2f", calc.kWhCharged()));
+                    System.out.println("  estCost=" + String.format(Locale.ROOT, "%.2f", calc.totalCost()));
                 }
                 continue;
             }

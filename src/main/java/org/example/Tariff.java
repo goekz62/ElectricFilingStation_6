@@ -5,11 +5,12 @@ public record Tariff(
         double pricePerKwhAC,
         double pricePerKwhDC,
         double pricePerMinuteAC,
-        double pricePerMinuteDC
+        double pricePerMinuteDC,
+        String timePeriod
 ) {
     @Override
     public String toString() {
-        return "Tariff{id='%s', kWhAC=%s, kWhDC=%s, minAC=%s, minDC=%s}"
-                .formatted(tariffId, pricePerKwhAC, pricePerKwhDC, pricePerMinuteAC, pricePerMinuteDC);
+        return "Tariff{id='%s', pricePerKwhAC=%s, pricePerKwhDC=%s, parkingPerMinAC=%s, parkingPerMinDC=%s, timePeriod='%s'}"
+                .formatted(tariffId, pricePerKwhAC, pricePerKwhDC, pricePerMinuteAC, pricePerMinuteDC, timePeriod);
     }
 }

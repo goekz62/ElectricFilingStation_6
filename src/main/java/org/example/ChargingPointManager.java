@@ -18,6 +18,35 @@ public class ChargingPointManager {
         points.put(id, new ChargingPoint(id, locationId, type, status));
     }
 
+    public void updateChargingPoint(
+            String id,
+            String locationId,
+            ChargingType type,
+            ChargingPointStatus status
+    ) {
+        ChargingPoint existing = points.get(id);
+        if (existing == null) {
+            throw new IllegalArgumentException("Charging point not found: " + id);
+        }
+        if (locationId == null || locationId.isBlank()) {
+            throw new IllegalArgumentException("locationId must not be empty");
+        }
+        if (type == null) {
+            throw new IllegalArgumentException("type must not be null");
+        }
+        if (status == null) {
+            throw new IllegalArgumentException("status must not be null");
+        }
+        points.put(id, new ChargingPoint(id, locationId, type, status));
+    }
+
+    public void deleteChargingPoint(String id) {
+        if (!points.containsKey(id)) {
+            throw new IllegalArgumentException("Charging point not found: " + id);
+        }
+        points.remove(id);
+    }
+
     public ChargingPoint readChargingPoint(String id) {
         return points.get(id);
     }
@@ -30,6 +59,30 @@ public class ChargingPointManager {
         return points.values().stream()
                 .filter(p -> p.locationId().equals(locationId))
                 .count();
+    }
+
+    public List<ChargingPoint> filterChargingPoints(
+            LocationManager locationManager,
+            String locationId,
+            ChargingType type,
+            ChargingPointStatus status,
+            Double maxPricePerKwh
+    ) {
+        return points.values().stream()
+                .filter(p -> locationId == null || p.locationId().equals(locationId))
+                .filter(p -> type == null || p.type() == type)
+                .filter(p -> status == null || p.status() == status)
+                .filter(p -> {
+                    if (maxPricePerKwh == null) return true;
+                    if (locationManager == null) return false;
+                    Location loc = locationManager.readLocation(p.locationId());
+                    if (loc == null || loc.tariff() == null) return false;
+                    double price = (p.type() == ChargingType.AC)
+                            ? loc.tariff().pricePerKwhAC()
+                            : loc.tariff().pricePerKwhDC();
+                    return price <= maxPricePerKwh;
+                })
+                .toList();
     }
 
     // ✅ REQUIRED FOR US-9

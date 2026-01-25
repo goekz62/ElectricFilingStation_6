@@ -17,6 +17,17 @@ Feature: EPIC 1 - Manage Locations and Charging Points
     And the operator tries to create another location with id "L1", name "Duplicate", address "Somewhere 2"
     Then the system shows an error containing "already exists"
 
+  Scenario: Update a location
+    Given a location exists with id "L1", name "Vienna Center", address "Stephansplatz 1"
+    When the operator updates location "L1" with name "Vienna Central" and address "Stephansplatz 2"
+    Then the location list contains a location with id "L1" and name "Vienna Central"
+
+  Scenario: Delete a location
+    Given a location exists with id "L1", name "Vienna Center", address "Stephansplatz 1"
+    When the operator deletes location "L1"
+    And the operator requests all locations
+    Then the system returns 0 locations
+
   # ---------------------------------------------------------
   # US-2 Add AC and DC charging points
   # ---------------------------------------------------------
@@ -36,6 +47,20 @@ Feature: EPIC 1 - Manage Locations and Charging Points
     And the operator tries to add another charging point with id "CP1" and type "DC" and status "AVAILABLE" to location "L1"
     Then the system shows an error containing "already exists"
 
+  Scenario: Update a charging point
+    Given a location exists with id "L1", name "Vienna Center", address "Stephansplatz 1"
+    And the operator adds a charging point with id "CP1" and type "AC" and status "AVAILABLE" to location "L1"
+    When the operator updates charging point "CP1" to location "L1" with type "DC" and status "OCCUPIED"
+    And the operator requests all charging points
+    Then the charging points include
+      | id  | type | status   |
+      | CP1 | DC   | OCCUPIED |
+
+  Scenario: Delete a charging point
+    Given a location exists with id "L1", name "Vienna Center", address "Stephansplatz 1"
+    And the operator adds a charging point with id "CP1" and type "AC" and status "AVAILABLE" to location "L1"
+    When the operator deletes charging point "CP1"
+    Then location "L1" has 0 charging points
   # ---------------------------------------------------------
   # US-3 View list of all locations
   # ---------------------------------------------------------
